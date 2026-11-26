@@ -1,0 +1,1 @@
+{"v":1,"kind":"user-trade","at":"2026-11-26T11:50:07.794Z","model":"gemini-3-flash-preview","instruction":"Sell 0.05 WHSK right now","action":{"type":"trade_now","side":"SELL","amountWhsk":0.05},"preflight":"COOLDOWN"}

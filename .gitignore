@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+contracts/out/
+contracts/cache/
+contracts/lib/
+contracts/broadcast/*/31337/
+agent/state.json
+*.log
+*.lock
+!agent/package-lock.json

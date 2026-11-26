@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Leash · AI trading agent on an on-chain leash · HSK Chain</title>
+<script src="vendor/ethers.umd.min.js"></script>
+<style>
+  :root { --bg:#0b0f14; --panel:#121821; --line:#1f2a37; --text:#e6edf3; --mute:#8b98a5; --accent:#38e1b0; --warn:#ffb547; --bad:#ff5d6c; --blue:#5aa9ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  a { color: var(--blue); text-decoration: none; } a:hover { text-decoration: underline; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 22px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(11,15,20,.92); backdrop-filter: blur(6px); z-index:5; }
+  .logo { font-weight:800; font-size:20px; letter-spacing:.3px; } .logo span { color: var(--accent); }
+  .tag { color:var(--mute); font-size:13px; }
+  .pill { padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid var(--line); }
+  .pill.ok { color:#06281f; background:var(--accent); border-color:var(--accent); } .pill.bad { color:#fff; background:var(--bad); border-color:var(--bad); }
+  .grow { flex:1; }
+  button { background:#1b2430; color:var(--text); border:1px solid #2b394a; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
+  button:hover { border-color: var(--accent); } button.primary { background:var(--accent); color:#06281f; border-color:var(--accent); } button.danger { background:#3a1218; border-color:var(--bad); color:#ffd7db; }
+  main { display:grid; grid-template-columns: 1.6fr 1fr; gap:16px; padding:16px 22px 40px; max-width:1500px; margin:0 auto; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--mute); display:flex; align-items:center; gap:8px; }
+  .kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
+  .kpi .v { font-size:24px; font-weight:800; } .kpi .s { color:var(--mute); font-size:12px; }
+  .pos { color: var(--accent); } .neg { color: var(--bad); }
+  table { width:100%; border-collapse:collapse; } th, td { text-align:right; padding:7px 6px; border-bottom:1px solid var(--line); white-space:nowrap; } th:first-child, td:first-child { text-align:left; } th { color:var(--mute); font-weight:600; font-size:12px; }
+  .limits { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+  .limit { background:#0e141c; border:1px solid var(--line); border-radius:9px; padding:8px 10px; } .limit .k { color:var(--mute); font-size:11px; text-transform:uppercase; letter-spacing:.05em; } .limit .v { font-size:17px; font-weight:700; } .limit .c { color:#5d6b79; font-size:11px; }
+  .feed { max-height: 520px; overflow:auto; }
+  .ev { border-left:3px solid var(--line); padding:7px 10px; margin:6px 0; background:#0e141c; border-radius:0 8px 8px 0; }
+  .ev.trade { border-color: var(--accent); } .ev.blocked { border-color: var(--bad); background:#1a0f13; } .ev.arb { border-color: var(--blue); } .ev.params { border-color: var(--warn); } .ev.decision { border-color:#6b7785; }
+  .ev .t { font-weight:700; } .ev .m { color:var(--mute); font-size:12.5px; } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  .chat { display:flex; flex-direction:column; height: 560px; }
+  .msgs { flex:1; overflow:auto; padding-right:4px; }
+  .msg { margin:8px 0; padding:9px 11px; border-radius:10px; white-space:pre-wrap; word-break:break-word; }
+  .msg.u { background:#1d3a32; margin-left:40px; } .msg.a { background:#16202b; margin-right:20px; }
+  .msg a { word-break: break-all; }
+  .chatin { display:flex; gap:8px; margin-top:8px; } .chatin input { flex:1; background:#0e141c; border:1px solid #2b394a; color:var(--text); border-radius:8px; padding:9px 10px; font-size:14px; }
+  .sig { display:grid; grid-template-columns: 1fr 1fr; gap:8px; } .sig .limit .v { font-size:16px; }
+  .note { color:#5d6b79; font-size:11.5px; margin-top:8px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#0e141c; border:1px solid var(--line); cursor:pointer; } .chip:hover { border-color:var(--accent); }
+  .ok-badge { color: var(--accent); font-size: 11px; }
+  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Leash<span>.</span></div>
+  <div class="tag">AI trading agent on HSKSwap — every limit enforced on-chain</div>
+  <div class="grow"></div>
+  <span class="pill" id="net">HSK Chain Testnet · 133</span>
+  <span class="pill" id="status">…</span>
+  <button id="connect">Connect wallet</button>
+</header>
+<main>
+  <section style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card">
+      <div class="kpis">
+        <div class="kpi"><div class="s">Vault NAV (TWAP)</div><div class="v" id="nav">–</div><div class="s" id="navsub">USDT</div></div>
+        <div class="kpi"><div class="s">Total P&amp;L</div><div class="v" id="pnl">–</div><div class="s" id="pnlsub">realized / unrealized</div></div>
+        <div class="kpi"><div class="s">Trades executed</div><div class="v" id="trades">–</div><div class="s" id="tradesub">today</div></div>
+        <div class="kpi"><div class="s">Blocked by the vault</div><div class="v neg" id="blocked">–</div><div class="s">agent requests refused on-chain</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Positions</h2>
+      <table><thead><tr><th>Asset</th><th>Balance</th><th>Cost basis</th><th>Value</th><th>TWAP price</th><th>Spot price</th><th>Weight</th><th>Unrealized</th></tr></thead><tbody id="positions"></tbody></table>
+    </div>
+    <div class="card">
+      <h2>Risk limits <span class="mono" style="text-transform:none;letter-spacing:0">(LeashVault storage — the agent cannot change these)</span></h2>
+      <div class="limits" id="limits"></div>
+      <div id="pending"></div>
+      <div id="ownerctl" style="display:none; margin-top:10px; gap:8px;">
+        <button class="danger" id="pauseBtn">Kill switch: pause agent</button>
+        <button id="unpauseBtn">Resume</button>
+        <span class="note">You are the vault owner. These buttons sign with your wallet.</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Market signals <span class="mono" style="text-transform:none;letter-spacing:0">(read live from HSKSwap pools)</span></h2>
+      <div class="sig" id="signals"></div>
+      <div class="note">TWAP = pool.observe() over 5 min. Testnet pool prices are synthetic; mainnet HSKSwap, the HashKey Global exchange and the APRO HSK/USD oracle are shown for reference.</div>
+    </div>
+  </section>
+  <section style="display:flex; flex-direction:column; gap:16px;">
+    <div class="card chat">
+      <h2>Talk to the agent</h2>
+      <div class="msgs" id="msgs"></div>
+      <div class="chips" id="chips"></div>
+      <div class="chatin"><input id="chatIn" placeholder="e.g. be more conservative, max 0.5 USDT a trade" /><button class="primary" id="send">Send</button></div>
+    </div>
+    <div class="card">
+      <h2>On-chain decision log <span class="mono" style="text-transform:none;letter-spacing:0">(every trade, block and hold)</span></h2>
+      <div class="feed" id="feed"></div>
+    </div>
+  </section>
+</main>
+<script>
+const qs = new URLSearchParams(location.search);
+const BASE = location.pathname.includes("/dashboard/") ? location.pathname.split("/dashboard/")[0] + "/" : "/";
+const AGENT = qs.get("agent") || (location.protocol.startsWith("http") && !/githack|github\.io/.test(location.host) ? "" : null);
+const CODES = ["NONE","PAUSED","TOKEN_NOT_ALLOWED","POOL_NOT_ALLOWED","INSUFFICIENT_BALANCE","COOLDOWN","FREQUENCY","ORACLE","PRICE_DEVIATION","TRADE_TOO_LARGE","POSITION_LIMIT","DAILY_LOSS_LIMIT","STOP_LOSS_ACTIVE","SLIPPAGE","ARB_UNPROFITABLE","ORACLE_DEVIATION","STABLE_DEPEG"];
+const ABI = [
+  "function nav() view returns (uint256)", "function pnl() view returns (int256,int256,int256)", "function paused() view returns (bool)",
+  "function tokens() view returns (address[])", "function position(address) view returns (uint256,uint256,uint256,uint256,uint256)",
+  "function risk() view returns (uint128 maxTradeQuote,uint16 maxPositionBps,uint16 maxSlippageBps,uint16 maxDeviationBps,uint16 dailyLossBps,uint16 stopLossBps,uint32 cooldown,uint16 maxTradesPerDay,uint32 twapWindow)",
+  "function tradeCount() view returns (uint256)", "function blockedCount() view returns (uint256)", "function tradesToday() view returns (uint16)",
+  "function owner() view returns (address)", "function pendingRiskAt() view returns (uint64)", "function loosenDelay() view returns (uint32)",
+  "function pendingRisk() view returns (uint128 maxTradeQuote,uint16 maxPositionBps,uint16 maxSlippageBps,uint16 maxDeviationBps,uint16 dailyLossBps,uint16 stopLossBps,uint32 cooldown,uint16 maxTradesPerDay,uint32 twapWindow)",
+  "event RiskParamsQueued((uint128,uint16,uint16,uint16,uint16,uint16,uint32,uint16,uint32) params,uint64 effectiveAt,bytes32 instructionHash,string instruction)", "function agent() view returns (address)", "function pause(string)", "function unpause()",
+  "event TradeExecuted(uint256 indexed id,address indexed tokenIn,address indexed tokenOut,uint24 fee,uint256 amountIn,uint256 amountOut,uint256 minAmountOut,int256 realizedPnl,bytes32 reasonHash,string memo)",
+  "event TradeBlocked(uint256 indexed id,uint8 indexed code,address tokenIn,address tokenOut,uint256 amountIn,bytes32 reasonHash,string memo)",
+  "event ArbitrageExecuted(uint256 indexed id,address tokenA,address tokenB,uint24 feeSell,uint24 feeBuy,uint256 amountIn,uint256 amountOut,bytes32 reasonHash,string memo)",
+  "event StopLossTriggered(address indexed token,address indexed caller,uint256 amountIn,uint256 amountOut,int256 realizedPnl)",
+  "event Decision(uint256 indexed id,uint8 indexed kind,bytes32 reasonHash,string memo)",
+  "event RiskParamsUpdated((uint128,uint16,uint16,uint16,uint16,uint16,uint32,uint16,uint32) params,bytes32 instructionHash,string instruction)",
+  "event Paused(address indexed by,string reason)", "event PendingRiskCancelled()", "event Unpaused(address indexed by)",
+  "event Deposited(address indexed token,uint256 amount,uint256 value)", "event Withdrawn(address indexed token,uint256 amount,address to)"
+];
+const POOL_ABI = ["function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)", "function observe(uint32[]) view returns (int56[],uint160[])", "function token0() view returns (address)"];
+let D, provider, vault, sym = {}, owner, signer;
+const $ = (id) => document.getElementById(id);
+const f = (x, p = 4) => (x === null || x === undefined || isNaN(x)) ? "–" : Number(x).toLocaleString(undefined, { minimumFractionDigits: p, maximumFractionDigits: p });
+const E = (x) => Number(ethers.formatEther(x));
+const short = (a) => a.slice(0, 6) + "…" + a.slice(-4);
+const tx = (h) => `<a class="mono" target="_blank" href="${D.explorer}/tx/${h}">${short(h)}</a>`;
+const addr = (a) => `<a class="mono" target="_blank" href="${D.explorer}/address/${a}">${short(a)}</a>`;
+const sgn = (x) => (x >= 0 ? "pos" : "neg");
+
+async function init() {
+  D = (await (await fetch(BASE + "deployments.json")).json())["hsk-testnet"];
+  provider = new ethers.JsonRpcProvider(D.rpc, D.chainId, { staticNetwork: true });
+  vault = new ethers.Contract(D.vault, ABI, provider);
+  for (const [s, t] of Object.entries(D.tokens)) sym[t.address.toLowerCase()] = s;
+  $("net").innerHTML = `HSK Chain Testnet · 133 · vault ${addr(D.vault)}`;
+  setupChat();
+  await refresh();
+  setInterval(refresh, 15000);
+}
+
+async function refresh() {
+  try {
+    const [navW, pnl, paused, toks, r, tc, bc, td, ow] = await Promise.all([vault.nav(), vault.pnl(), vault.paused(), vault.tokens(), vault.risk(), vault.tradeCount(), vault.blockedCount(), vault.tradesToday(), vault.owner()]);
+    owner = ow;
+    const nav = E(navW);
+    $("nav").textContent = f(nav, 4); $("navsub").textContent = "USDT · valued at pool TWAP";
+    $("pnl").innerHTML = `<span class="${sgn(E(pnl[0]))}">${E(pnl[0]) >= 0 ? "+" : ""}${f(E(pnl[0]), 4)}</span>`;
+    $("pnlsub").innerHTML = `realized <span class="${sgn(E(pnl[1]))}">${f(E(pnl[1]), 4)}</span> · unrealized <span class="${sgn(E(pnl[2]))}">${f(E(pnl[2]), 4)}</span> · ${nav ? f(E(pnl[0]) / (nav - E(pnl[0])) * 100, 2) : 0}%`;
+    $("trades").textContent = tc.toString(); $("tradesub").textContent = `${td} today`; $("blocked").textContent = bc.toString();
+    $("status").className = "pill " + (paused ? "bad" : "ok"); $("status").textContent = paused ? "PAUSED (kill switch)" : "AGENT ACTIVE";
+    let rows = "";
+    for (const t of toks) {
+      const [bal, cost, val, pt, ps] = await vault.position(t);
+      const s = sym[t.toLowerCase()] || short(t);
+      const un = E(val) - E(cost);
+      rows += `<tr><td><b>${s}</b> ${addr(t)}</td><td>${f(E(bal), 6)}</td><td>${f(E(cost))}</td><td>${f(E(val))}</td><td>${f(E(pt))}</td><td>${f(E(ps))}</td><td>${nav ? f(E(val) / nav * 100, 1) : 0}%</td><td class="${s === "USDT" ? "" : sgn(un)}">${s === "USDT" ? "–" : f(un)}</td></tr>`;
+    }
+    $("positions").innerHTML = rows;
+    const L = [["Max trade size", f(E(r.maxTradeQuote), 2) + " USDT", "per trade, at TWAP"], ["Max position", Number(r.maxPositionBps) / 100 + "%", "of NAV per asset"], ["Max slippage", Number(r.maxSlippageBps) / 100 + "%", "vs TWAP · hard cap 10%"],
+      ["Manipulation guard", Number(r.maxDeviationBps) / 100 + "%", "spot vs TWAP · cap 20%"], ["Daily loss breaker", Number(r.dailyLossBps) / 100 + "%", "then de-risk only · cap 50%"], ["Stop-loss", Number(r.stopLossBps) ? Number(r.stopLossBps) / 100 + "%" : "off", "anyone can enforce"],
+      ["Cooldown", r.cooldown + " s", "between trades"], ["Trades / day", r.maxTradesPerDay.toString(), "frequency cap"], ["TWAP window", r.twapWindow + " s", "pool.observe()"]];
+    const [pAt, ld] = await Promise.all([vault.pendingRiskAt(), vault.loosenDelay()]);
+    let pend = `<div class="note" style="margin-top:8px">Tightening applies instantly. Loosening any limit is timelocked on-chain for ${Number(ld) / 60} min.</div>`;
+    if (Number(pAt)) { const pr = await vault.pendingRisk(); pend = `<div class="ev params" style="margin-top:10px"><div class="t">⏳ Looser limits queued, effective ${new Date(Number(pAt) * 1000).toLocaleTimeString()}</div><div class="m">max trade ${f(E(pr.maxTradeQuote), 2)} USDT · position ${Number(pr.maxPositionBps) / 100}% · slippage ${Number(pr.maxSlippageBps) / 100}% · stop ${Number(pr.stopLossBps) / 100}% · cooldown ${pr.cooldown}s · ${pr.maxTradesPerDay}/day. Owner can cancel before then.</div></div>`; }
+    $("limits").innerHTML = L.map(([k, v, c]) => `<div class="limit"><div class="k">${k}</div><div class="v">${v}</div><div class="c">${c}</div></div>`).join("");
+    $("pending").innerHTML = pend;
+    $("ownerctl").style.display = signer && (await signer.getAddress()).toLowerCase() === owner.toLowerCase() ? "flex" : "none";
+    await Promise.all([signals(), feed()]);
+  } catch (e) { console.error(e); }
+}
+
+function priceFromTick(tick, token0, whsk, dec0 = 18, dec1 = 18) {
+  const raw = Math.pow(1.0001, Number(tick)) * Math.pow(10, dec0 - dec1);
+  return token0.toLowerCase() === whsk.toLowerCase() ? raw : 1 / raw;
+}
+async function signals() {
+  const W = D.tokens.WHSK.address; const out = [];
+  for (const [name, p] of Object.entries(D.pools)) {
+    const pool = new ethers.Contract(p.address, POOL_ABI, provider);
+    const [s0, t0] = await Promise.all([pool.slot0(), pool.token0()]);
+    let tw = null; try { const [c] = await pool.observe([300, 0]); tw = Number((c[1] - c[0]) / 300n); } catch {}
+    out.push({ name, spot: priceFromTick(s0[1], t0, W), twap: tw === null ? null : priceFromTick(tw, t0, W) });
+  }
+  const spread = (out[0].spot - out[1].spot) / Math.min(out[0].spot, out[1].spot) * 1e4;
+  let cex = null, mdex = null;
+  let apro = null;
+  try { cex = Number((await (await fetch("https://api-glb.hashkey.com/quote/v1/ticker/price?symbol=HSKUSDT")).json())[0].p); } catch {}
+  try {
+    const mp = new ethers.JsonRpcProvider("https://mainnet.hsk.xyz", 177, { staticNetwork: true });
+    const pool = new ethers.Contract("0x4ff515761864e7838B0AdB8b5b2B8B7A068905dC", POOL_ABI, mp);
+    const [s0, t0] = await Promise.all([pool.slot0(), pool.token0()]);
+    const feed = new ethers.Contract("0x86CE42c1b714149Dc3A7b17169EF67b5F78A224b", ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)"], mp);
+    try { const r = await feed.latestRoundData(); apro = Number(r[1]) / 1e8; } catch {}
+    mdex = priceFromTick(s0[1], t0, "0xB210D2120d57b758EE163cFfb43e73728c471Cf1", t0.toLowerCase() === "0xb210d2120d57b758ee163cffb43e73728c471cf1" ? 18 : 6, t0.toLowerCase() === "0xb210d2120d57b758ee163cffb43e73728c471cf1" ? 6 : 18);
+  } catch {}
+  $("signals").innerHTML = out.map((o) => `<div class="limit"><div class="k">${o.name} (testnet)</div><div class="v">${f(o.spot, 3)} USDT</div><div class="c">TWAP 5m ${f(o.twap, 3)}</div></div>`).join("") +
+    `<div class="limit"><div class="k">Fee-tier spread (arb signal)</div><div class="v ${Math.abs(spread) > 40 ? "pos" : ""}">${f(spread, 0)} bps</div><div class="c">agent takes it atomically if the quoted round trip is profitable</div></div>` +
+    `<div class="limit"><div class="k">Mainnet HSK/USD: HSKSwap · HashKey Global · APRO</div><div class="v">${f(mdex, 4)} · ${f(cex, 4)} · ${f(apro, 4)}</div><div class="c">CEX–DEX spread ${mdex && cex ? f((cex - mdex) / mdex * 1e4, 0) + " bps" : "–"} · APRO oracle feeds the vault's mainnet cross-check</div></div>`;
+}
+
+const reasonCache = {};
+async function verifyReason(h) {
+  if (!h || /^0x0+$/.test(h)) return "";
+  if (reasonCache[h] !== undefined) return reasonCache[h];
+  try {
+    const r = await fetch(BASE + "decisions/" + h + ".json"); if (!r.ok) throw 0;
+    const text = await r.text(); const ok = ethers.keccak256(ethers.toUtf8Bytes(text)) === h;
+    reasonCache[h] = ` · <a target="_blank" href="${BASE}decisions/${h}.json">reasoning</a> ${ok ? '<span class="ok-badge">hash ✓</span>' : '<span class="neg">hash ✗</span>'}`;
+  } catch { reasonCache[h] = ` · <span class="mono">reason ${short(h)}</span>`; }
+  return reasonCache[h];
+}
+async function feed() {
+  const latest = await provider.getBlockNumber(); const logs = [];
+  for (let s = D.vaultDeployBlock; s <= latest; s += 50000) logs.push(...await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 49999) }));
+  const items = [];
+  for (const l of logs.reverse().slice(0, 60)) {
+    let ev; try { ev = vault.interface.parseLog(l); } catch { continue; } if (!ev) continue; const a = ev.args; let cls = "decision", t = ev.name, m = "";
+    const S = (x) => sym[x.toLowerCase()] || short(x);
+    if (ev.name === "TradeExecuted") { cls = "trade"; t = `✓ Trade #${a.id}: ${f(E(a.amountIn), 6)} ${S(a.tokenIn)} → ${f(E(a.amountOut), 6)} ${S(a.tokenOut)} (${Number(a.fee) / 1e4}% pool)`; m = `${a.memo} · min-out enforced ${f(E(a.minAmountOut), 6)} · realized ${f(E(a.realizedPnl), 4)} USDT` + await verifyReason(a.reasonHash); }
+    else if (ev.name === "ArbitrageExecuted") { cls = "arb"; t = `⇄ Arbitrage #${a.id}: ${f(E(a.amountIn), 6)} → ${f(E(a.amountOut), 6)} ${S(a.tokenA)} (sell ${Number(a.feeSell) / 1e4}% / buy ${Number(a.feeBuy) / 1e4}%)`; m = `+${f((E(a.amountOut) / E(a.amountIn) - 1) * 100, 2)}% · ${a.memo}` + await verifyReason(a.reasonHash); }
+    else if (ev.name === "TradeBlocked") { cls = "blocked"; t = `⛔ Blocked #${a.id}: ${CODES[Number(a.code)]}`; m = `agent asked ${f(E(a.amountIn), 6)} ${S(a.tokenIn)} → ${S(a.tokenOut)} · ${a.memo}` + await verifyReason(a.reasonHash); }
+    else if (ev.name === "Decision") { t = `• Decision #${a.id} (hold)`; m = a.memo + await verifyReason(a.reasonHash); }
+    else if (ev.name === "RiskParamsUpdated") { cls = "params"; t = "⚙ Limits updated by owner"; m = `“${a.instruction}”`; }
+    else if (ev.name === "RiskParamsQueued") { cls = "params"; t = "⏳ Looser limits requested → timelocked"; m = `“${a.instruction}” · effective ${new Date(Number(a.effectiveAt) * 1000).toLocaleTimeString()} unless the owner cancels`; }
+    else if (ev.name === "PendingRiskCancelled") { cls = "params"; t = "✕ Owner cancelled the queued loosening"; }
+    else if (ev.name === "Paused") { cls = "blocked"; t = "■ Kill switch: paused"; m = a.reason; }
+    else if (ev.name === "Unpaused") { cls = "params"; t = "▶ Resumed by owner"; }
+    else if (ev.name === "StopLossTriggered") { cls = "blocked"; t = "Stop-loss enforced"; }
+    else if (ev.name === "Deposited") { t = `Deposit ${f(E(a.amount), 6)} ${S(a.token)}`; m = `valued ${f(E(a.value), 4)} USDT`; }
+    else continue;
+    items.push(`<div class="ev ${cls}"><div class="t">${t}</div><div class="m">${m}</div><div class="m">block ${l.blockNumber} · ${tx(l.transactionHash)}</div></div>`);
+  }
+  $("feed").innerHTML = items.join("") || '<div class="note">No events yet.</div>';
+}
+
+function addMsg(text, who) {
+  const d = document.createElement("div"); d.className = "msg " + who;
+  d.innerHTML = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/(https?:\/\/[^\s)]+)/g, (u) => `<a target="_blank" href="${u}">${u.includes("/tx/") ? "tx " + short(u.split("/tx/")[1]) : u}</a>`);
+  $("msgs").appendChild(d); $("msgs").scrollTop = 1e9; return d;
+}
+function setupChat() {
+  addMsg(AGENT === null ? "Read-only view: this page reads the vault straight from HSK Chain. To chat with the agent, run it locally (npm start) and open http://localhost:8787, or add ?agent=http://localhost:8787 to this URL." : "Hi, I'm Leash. Ask me about positions and P&L, or tell me how to trade: risk appetite, size, frequency, assets. Limits I set are written to the vault contract.", "a");
+  const ex = ["What are my positions and P&L?", "Be conservative: max 0.5 USDT per trade, 5% stop-loss", "Trade at most 10 times a day", "Sell 0.05 WHSK right now", "Pause trading"];
+  $("chips").innerHTML = ex.map((e) => `<span class="chip">${e}</span>`).join("");
+  $("chips").onclick = (e) => { if (e.target.classList.contains("chip")) { $("chatIn").value = e.target.textContent; send(); } };
+  $("send").onclick = send; $("chatIn").onkeydown = (e) => { if (e.key === "Enter") send(); };
+}
+async function send() {
+  const m = $("chatIn").value.trim(); if (!m) return; $("chatIn").value = ""; addMsg(m, "u");
+  if (AGENT === null) return addMsg("Agent API not connected in this hosted view (see above).", "a");
+  const w = addMsg("…thinking, checking the chain", "a");
+  try {
+    const r = await (await fetch((AGENT || "") + "/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: m }) })).json();
+    w.remove(); addMsg(r.text || r.error || "no answer", "a"); refresh();
+  } catch (e) { w.remove(); addMsg("Agent unreachable: " + e.message, "a"); }
+}
+$("connect").onclick = async () => {
+  if (!window.ethereum) return alert("No injected wallet found");
+  const bp = new ethers.BrowserProvider(window.ethereum);
+  try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x85" }] }); }
+  catch { await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0x85", chainName: "HSK Chain Testnet", nativeCurrency: { name: "HSK", symbol: "HSK", decimals: 18 }, rpcUrls: [D.rpc], blockExplorerUrls: [D.explorer] }] }); }
+  signer = await bp.getSigner(); $("connect").textContent = short(await signer.getAddress()); refresh();
+};
+$("pauseBtn").onclick = async () => { await (await vault.connect(signer).pause("owner kill switch from dashboard")).wait(); refresh(); };
+$("unpauseBtn").onclick = async () => { await (await vault.connect(signer).unpause()).wait(); refresh(); };
+init();
+</script>
+</body>
+</html>

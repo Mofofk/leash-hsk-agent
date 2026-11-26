@@ -1,0 +1,19 @@
+{
+  "name": "leash-agent",
+  "version": "1.0.0",
+  "description": "Leash: AI trading agent for HSKSwap on HSK Chain, on an on-chain leash",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "NODE_USE_ENV_PROXY=1 node --no-warnings src/server.js",
+    "auto": "AUTO=1 NODE_USE_ENV_PROXY=1 node --no-warnings src/server.js",
+    "cycle": "NODE_USE_ENV_PROXY=1 node --no-warnings src/cli.js cycle",
+    "status": "node src/cli.js status",
+    "chat": "NODE_USE_ENV_PROXY=1 node --no-warnings src/cli.js chat"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.17.0"
+  },
+  "type": "module"
+}
