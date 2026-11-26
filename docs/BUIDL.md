@@ -1,4 +1,4 @@
-# DoraHacks BUIDL write-up: Leash (draft, not submitted)
+# DoraHacks BUIDL write-up: Leash
 
 **Name:** Leash
 
@@ -7,8 +7,8 @@
 **Track:** Track 1: AI Agent Trading (HSK Chain Horizon Hackathon · Seoul)
 
 **Links**
-- GitHub: https://github.com/Mofofk/leash-hsk-agent (private until approved for publishing)
-- Dashboard (static, reads the chain): https://raw.githack.com/Mofofk/leash-hsk-agent/main/dashboard/index.html (works once the repo is public)
+- GitHub: https://github.com/Mofofk/leash-hsk-agent
+- Dashboard (static, reads the chain): https://raw.githack.com/Mofofk/leash-hsk-agent/main/dashboard/index.html
 - Demo video: docs/Leash_HSK_demo.mp4, 2:46 with captions (upload to YouTube/X and paste the link)
 - Vault (HSK testnet, verified): https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A
 
