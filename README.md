@@ -2,11 +2,28 @@
 
 **An AI trading agent for HSKSwap whose risk limits live in a smart contract the AI cannot override.**
 
+![Leash dashboard on HSK Chain testnet: track record, NAV and P&L chart, limits, on-chain decision log](docs/images/dashboard.png)
+
+![tests](https://img.shields.io/badge/forge%20test-34%20passing-38e1b0) ![network](https://img.shields.io/badge/HSK%20Chain-testnet%20133-5aa9ff) ![status](https://img.shields.io/badge/audit-not%20audited-ffb547) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
+
 Entry for the **HSK Chain Horizon Hackathon · Seoul, Track 1: AI Agent Trading**.
 
-Leash watches the HSKSwap pools on HSK Chain, finds signals and spreads, lets Gemini pick a trade, and sends it to a vault contract. The vault decides. It checks every request against on-chain limits that you set in plain words, and it **logs the requests it refuses as on-chain events** with a reason code and a hash of the agent's reasoning. Tightening a limit is instant. Loosening one is timelocked, so a hijacked prompt can't quietly widen the leash.
+## For judges: 60-second summary
 
-![Leash dashboard on HSK Chain testnet](docs/images/dashboard.png)
+* **What it is.** An autonomous agent reads both HSKSwap WHSK/USDT pools, Gemini picks a trade (or holds) from rule-based candidates, and a vault contract on HSK Chain decides whether it happens.
+* **Why it's different.** The vault **logs refused trades on-chain** (`TradeBlocked` with a reason code) instead of silently reverting. **Tightening a limit is instant, loosening is timelocked**, so a hijacked prompt can't widen the leash. Every decision carries a `reasonHash`, and the dashboard re-hashes the published reasoning to prove it matches the chain. Arbitrage is atomic: profit or revert.
+* **Proof (HSK testnet, verified contract).** Vault [`0x998F…951A`](https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A) · autonomous arbitrage [0xf2c460ca…](https://testnet-explorer.hskchain.net/tx/0xf2c460ca566e2d7af649d9865912bc9f1da0e51a8b2e0f14684c5c43b022579f) · trade blocked on-chain [0xaf700637…](https://testnet-explorer.hskchain.net/tx/0xaf7006376f7f17e2d458039f5fcfba4adf19eed2cdb93e5d6c2416866c83480f) · loosening timelocked [0x22a53cc4…](https://testnet-explorer.hskchain.net/tx/0x22a53cc4009173d5c85f291a3a22bf797847e4c82877d8482f32b67758777e22) · kill switch [0xe7cf5fc7…](https://testnet-explorer.hskchain.net/tx/0xe7cf5fc7fada41bdb94d6efde0eebcb693742dfcb888cfe939159bc0949daa4d) · autonomous hold with reasoning [0xe58294b2…](https://testnet-explorer.hskchain.net/tx/0xe58294b26479ae5d4a0e5651a8d0940ad629d5dd1c5d84ad158dbd9b35cd58ce)
+* **Maturity.** 34 Foundry tests (33 on a fork of the live HSK testnet pools, 1 mainnet dry run with APRO). Mainnet deploy script ready, not run.
+* **HSK products used.** HSKSwap (SwapRouter02, QuoterV2, V3 pools, factory), HSK Blockscout verification, APRO oracle, HashKey Global market data, `@hskswap/sdk-core` addresses.
+* **Honest limits.** Testnet pool prices are synthetic, so gains shown are mechanics, not market profit. The track record is a small testnet run, not a backtest. Not audited.
+
+**Quickstart (one command, no keys):**
+
+```bash
+git clone https://github.com/Mofofk/leash-hsk-agent && cd leash-hsk-agent && ./quickstart.sh
+```
+
+It installs `forge-std`, builds and runs the 34 tests, then serves the read-only dashboard at `http://localhost:8080/dashboard/`. To run the agent itself, see [Run it](#run-it).
 
 | | |
 |---|---|
@@ -14,8 +31,8 @@ Leash watches the HSKSwap pools on HSK Chain, finds signals and spreads, lets Ge
 | **Vault (v3, live)** | [`0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A`](https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A) · source verified on HSK Blockscout |
 | **DEX** | HSKSwap: SwapRouter02, QuoterV2 and the WHSK/USDT 0.05% and 0.3% pools |
 | **AI** | Google Gemini (AI Studio) picks between rule-based candidates and runs the chat |
-| **Tests** | 34 Foundry tests: 33 on a fork of the live HSK testnet pools, plus 1 mainnet dry run with the APRO oracle |
-| **Demo video** | `docs/Leash_HSK_demo.mp4` (2:43) |
+| **Tests** | `cd contracts && forge test`: 34 tests, 33 on a fork of the live HSK testnet pools plus 1 mainnet dry run with the APRO oracle |
+| **Demo video** | `docs/Leash_HSK_demo.mp4` (2:46, captioned) |
 
 ---
 
@@ -95,7 +112,7 @@ flowchart LR
 
 **The dashboard shows it:** `dashboard/index.html`
 
-A static page that reads HSK Chain directly: NAV, P&L, positions, live limits, any queued loosening, market signals, and the on-chain decision log, where each entry's reasoning file is re-hashed in the browser (✓). You can connect a wallet to switch to chain 133; the owner gets kill-switch buttons. Chat works when the local agent is running.
+A static page that reads HSK Chain directly, with no wallet needed: a **track record** rebuilt from on-chain events (counts of decisions, swaps, arbitrages, blocks and holds) with a **NAV and cumulative P&L chart** read from the vault at each event's block, NAV, P&L, positions, live limits, any queued loosening, market signals, and the on-chain decision log, where each entry's reasoning file is re-hashed in the browser (✓), filterable by kind. It works on mobile and shows loading and RPC-error states. You can connect a wallet to switch to chain 133; the owner gets kill-switch buttons. Chat works when the local agent is running.
 
 ---
 
@@ -114,6 +131,9 @@ A static page that reads HSK Chain directly: NAV, P&L, positions, live limits, a
 
 | Event | Tx |
 |---|---|
+| ⇄ Autonomous arbitrage picked by Gemini in the agent loop | [0xf2c460ca…579f](https://testnet-explorer.hskchain.net/tx/0xf2c460ca566e2d7af649d9865912bc9f1da0e51a8b2e0f14684c5c43b022579f) |
+| • Autonomous hold, logged with a reasoning hash (vault in cooldown) | [0xe58294b2…58ce](https://testnet-explorer.hskchain.net/tx/0xe58294b26479ae5d4a0e5651a8d0940ad629d5dd1c5d84ad158dbd9b35cd58ce) |
+| ⛔ Oversized chat order blocked (`TRADE_TOO_LARGE`, 0.02 WHSK ≈ 1.56 USDT vs 0.5 limit) | [0xaf700637…480f](https://testnet-explorer.hskchain.net/tx/0xaf7006376f7f17e2d458039f5fcfba4adf19eed2cdb93e5d6c2416866c83480f) |
 | ✓ Trade executed (`executeSwap`, 0.004 WHSK → 0.3125 USDT, TWAP floor enforced) | [0x425e25ee…1e16](https://testnet-explorer.hskchain.net/tx/0x425e25eed1e3e69df8dd50c813a591b060285ddc60768d9752f52150057c1e16) |
 | ⇄ Atomic arbitrage (0.0115 → 0.0165 WHSK across fee tiers) | [0x2774bc3e…6e07](https://testnet-explorer.hskchain.net/tx/0x2774bc3ea9588b946ebd8dd0bdeccdf7b8ed13097698736f89caab4bf6bb6e07) |
 | ⛔ Trade blocked on-chain: `TRADE_TOO_LARGE` | [0x269ad66d…211b](https://testnet-explorer.hskchain.net/tx/0x269ad66d985ffb13ee9ba44f1236de3ccff77870587f7bc7a2d25b1037e6211b), [0xe90c2340…9ced](https://testnet-explorer.hskchain.net/tx/0xe90c23405ed7806d37146275eb04506f1ab23fef981c744cc0172e35b1779ced) |

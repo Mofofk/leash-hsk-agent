@@ -41,7 +41,28 @@
   .note { color:#5d6b79; font-size:11.5px; margin-top:8px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#0e141c; border:1px solid var(--line); cursor:pointer; } .chip:hover { border-color:var(--accent); }
   .ok-badge { color: var(--accent); font-size: 11px; }
+  .chartwrap { position:relative; width:100%; }
+  .chartwrap svg { width:100%; height:auto; display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--mute); margin-top:6px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+  .record { display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:10px; }
+  .record .limit .v { font-size:20px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; } .tab { font-size:12px; padding:4px 9px; border-radius:999px; background:#0e141c; border:1px solid var(--line); cursor:pointer; color:var(--mute); } .tab.on { color:var(--text); border-color:var(--accent); }
+  .skel { color:#5d6b79; font-size:13px; padding:18px 4px; text-align:center; }
+  .skel::before { content:""; display:inline-block; width:10px; height:10px; margin-right:8px; border-radius:50%; border:2px solid #2b394a; border-top-color:var(--accent); animation:spin .9s linear infinite; vertical-align:-1px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .banner { display:none; margin:12px 22px 0; padding:9px 12px; border-radius:9px; border:1px solid var(--warn); color:var(--warn); background:#231b0c; font-size:13px; }
+  .tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  main > section, .card { min-width:0; } html, body { overflow-x:hidden; }
   @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} }
+  @media (max-width: 640px) {
+    header { flex-wrap:wrap; padding:10px 12px; gap:8px; position:static; } .tag { display:none; } .grow { display:none; }
+    #net { font-size:11px; } main { padding:12px 10px 30px; gap:12px; } .card { padding:12px; }
+    .kpi .v { font-size:20px; } .limits { grid-template-columns: repeat(2, 1fr); } .sig { grid-template-columns: 1fr; }
+    .record { grid-template-columns: repeat(3, 1fr); } .record .limit .v { font-size:17px; }
+    .chat { height:auto; } .msgs { max-height:320px; } .feed { max-height:420px; }
+    .card h2 { flex-wrap:wrap; } .banner { margin:10px 10px 0; }
+  }
 </style>
 </head>
 <body>
@@ -53,6 +74,7 @@
   <span class="pill" id="status">…</span>
   <button id="connect">Connect wallet</button>
 </header>
+<div class="banner" id="banner"></div>
 <main>
   <section style="display:flex; flex-direction:column; gap:16px;">
     <div class="card">
@@ -64,12 +86,19 @@
       </div>
     </div>
     <div class="card">
+      <h2>Track record <span class="mono" style="text-transform:none;letter-spacing:0">(rebuilt from on-chain events · NAV read at each event's block)</span></h2>
+      <div class="record" id="record"><div class="skel" style="grid-column:1/-1">Reading the vault's history from HSK Chain…</div></div>
+      <div class="chartwrap" id="chart"></div>
+      <div class="legend"><span><i style="background:var(--accent)"></i>NAV (USDT, at pool TWAP)</span><span><i style="background:var(--warn)"></i>Cumulative P&amp;L</span><span><i style="background:var(--blue)"></i>arbitrage</span><span><i style="background:#9be7cf"></i>swap</span><span><i style="background:var(--bad)"></i>blocked request (ticks under the chart)</span></div>
+      <div class="note">Testnet pool prices are synthetic (the two fee tiers sit far apart), so arbitrage gains here prove the mechanics, not market profit.</div>
+    </div>
+    <div class="card">
       <h2>Positions</h2>
-      <table><thead><tr><th>Asset</th><th>Balance</th><th>Cost basis</th><th>Value</th><th>TWAP price</th><th>Spot price</th><th>Weight</th><th>Unrealized</th></tr></thead><tbody id="positions"></tbody></table>
+      <div class="tscroll"><table><thead><tr><th>Asset</th><th>Balance</th><th>Cost basis</th><th>Value</th><th>TWAP price</th><th>Spot price</th><th>Weight</th><th>Unrealized</th></tr></thead><tbody id="positions"><tr><td colspan="8"><div class="skel">Loading positions…</div></td></tr></tbody></table></div>
     </div>
     <div class="card">
       <h2>Risk limits <span class="mono" style="text-transform:none;letter-spacing:0">(LeashVault storage — the agent cannot change these)</span></h2>
-      <div class="limits" id="limits"></div>
+      <div class="limits" id="limits"><div class="skel" style="grid-column:1/-1">Loading limits…</div></div>
       <div id="pending"></div>
       <div id="ownerctl" style="display:none; margin-top:10px; gap:8px;">
         <button class="danger" id="pauseBtn">Kill switch: pause agent</button>
@@ -79,7 +108,7 @@
     </div>
     <div class="card">
       <h2>Market signals <span class="mono" style="text-transform:none;letter-spacing:0">(read live from HSKSwap pools)</span></h2>
-      <div class="sig" id="signals"></div>
+      <div class="sig" id="signals"><div class="skel" style="grid-column:1/-1">Reading HSKSwap pools…</div></div>
       <div class="note">TWAP = pool.observe() over 5 min. Testnet pool prices are synthetic; mainnet HSKSwap, the HashKey Global exchange and the APRO HSK/USD oracle are shown for reference.</div>
     </div>
   </section>
@@ -92,7 +121,8 @@
     </div>
     <div class="card">
       <h2>On-chain decision log <span class="mono" style="text-transform:none;letter-spacing:0">(every trade, block and hold)</span></h2>
-      <div class="feed" id="feed"></div>
+      <div class="tabs" id="tabs"></div>
+      <div class="feed" id="feed"><div class="skel">Loading the decision log…</div></div>
     </div>
   </section>
 </main>
@@ -135,6 +165,7 @@ async function init() {
   for (const [s, t] of Object.entries(D.tokens)) sym[t.address.toLowerCase()] = s;
   $("net").innerHTML = `HSK Chain Testnet · 133 · vault ${addr(D.vault)}`;
   setupChat();
+  $("tabs").onclick = (e) => { const k = e.target.dataset?.k; if (k) { filter = k; feed(); } };
   await refresh();
   setInterval(refresh, 15000);
 }
@@ -166,8 +197,10 @@ async function refresh() {
     $("limits").innerHTML = L.map(([k, v, c]) => `<div class="limit"><div class="k">${k}</div><div class="v">${v}</div><div class="c">${c}</div></div>`).join("");
     $("pending").innerHTML = pend;
     $("ownerctl").style.display = signer && (await signer.getAddress()).toLowerCase() === owner.toLowerCase() ? "flex" : "none";
-    await Promise.all([signals(), feed()]);
-  } catch (e) { console.error(e); }
+    const latest = await loadLogs();
+    $("banner").style.display = "none";
+    await Promise.all([signals().catch(console.error), feed(), history(latest).catch((e) => { console.error(e); $("chart").innerHTML = '<div class="note">Could not rebuild the history from this RPC (historical state calls failed).</div>'; })]);
+  } catch (e) { console.error(e); const b = $("banner"); b.style.display = "block"; b.textContent = "Can't reach HSK Chain testnet RPC right now (" + (e.shortMessage || e.message || e) + "). Retrying every 15 s."; }
 }
 
 function priceFromTick(tick, token0, whsk, dec0 = 18, dec1 = 18) {
@@ -210,12 +243,80 @@ async function verifyReason(h) {
   } catch { reasonCache[h] = ` · <span class="mono">reason ${short(h)}</span>`; }
   return reasonCache[h];
 }
+// ---- on-chain event cache (incremental) -------------------------------------------------------------
+let LOGS = [], lastBlock = null, filter = "all", histKey = "", tsCache = {};
+async function loadLogs() {
+  const latest = await provider.getBlockNumber();
+  const from = lastBlock === null ? D.vaultDeployBlock : lastBlock + 1;
+  for (let s = from; s <= latest; s += 50000) {
+    const raw = await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 49999) });
+    for (const l of raw) { let ev = null; try { ev = vault.interface.parseLog(l); } catch {} if (ev) LOGS.push({ l, ev }); }
+  }
+  lastBlock = latest;
+  return latest;
+}
+const KIND = (n) => ({ TradeExecuted: "trade", ArbitrageExecuted: "arb", TradeBlocked: "blocked", Decision: "hold" })[n] || "admin";
+
+async function blockTime(b) {
+  if (!tsCache[b]) tsCache[b] = (await provider.getBlock(b)).timestamp;
+  return tsCache[b];
+}
+async function history(latest) {
+  const acts = LOGS.filter(({ ev }) => ["TradeExecuted", "ArbitrageExecuted", "TradeBlocked", "Decision", "Deposited", "Withdrawn", "StopLossTriggered"].includes(ev.name));
+  const c = { decisions: 0, trade: 0, arb: 0, blocked: 0, hold: 0 };
+  for (const { ev } of acts) { const k = KIND(ev.name); if (k in c) { c[k]++; c.decisions++; } }
+  $("record").innerHTML = [["Decisions on-chain", c.decisions, "each with a reasoning hash"], ["Swaps", c.trade, "executed"], ["Arbitrages", c.arb, "atomic, profit or revert"], ["Blocked", c.blocked, "refused by the vault"], ["Holds", c.hold, "logged with reasons"]]
+    .map(([k, v, d]) => `<div class="limit"><div class="k">${k}</div><div class="v">${v}</div><div class="c">${d}</div></div>`).join("");
+  const key = acts.length + ":" + (acts.at(-1)?.l.blockNumber || 0);
+  if (key === histKey) return; histKey = key;
+  // sample NAV/P&L at every block where the books moved, plus a few hold blocks and the latest block (max ~70 calls)
+  const moving = [...new Set(acts.filter(({ ev }) => ev.name !== "Decision" && ev.name !== "TradeBlocked").map(({ l }) => l.blockNumber))];
+  let blocks = [D.vaultDeployBlock + 1, ...moving, latest];
+  if (blocks.length > 70) blocks = blocks.filter((_, i) => i % Math.ceil(blocks.length / 70) === 0).concat([latest]);
+  blocks = [...new Set(blocks)].sort((a, b) => a - b);
+  const pts = (await Promise.all(blocks.map(async (b) => {
+    try { const [n, p] = await Promise.all([vault.nav({ blockTag: b }), vault.pnl({ blockTag: b })]); return { b, t: await blockTime(b), nav: E(n), pnl: E(p[0]) }; } catch { return null; }
+  }))).filter((p) => p && p.nav > 0);
+  const marks = await Promise.all(acts.filter(({ ev }) => ["TradeExecuted", "ArbitrageExecuted", "TradeBlocked"].includes(ev.name)).map(async ({ l, ev }) => ({ t: await blockTime(l.blockNumber), k: KIND(ev.name) })));
+  drawChart(pts, marks);
+}
+function drawChart(pts, marks) {
+  if (pts.length < 2) { $("chart").innerHTML = '<div class="skel" style="animation:none">Not enough history yet: the chart appears after the first trades.</div>'; return; }
+  const W = 900, H = 260, L = 52, R = 52, T = 14, B = 44;
+  const t0 = pts[0].t, t1 = Math.max(pts.at(-1).t, t0 + 1);
+  const x = (t) => L + (t - t0) / (t1 - t0) * (W - L - R);
+  const nv = pts.map((p) => p.nav), pv = pts.map((p) => p.pnl);
+  let n0 = Math.min(...nv), n1 = Math.max(...nv); const pad = Math.max((n1 - n0) * 0.15, n1 * 0.01); n0 -= pad; n1 += pad;
+  let p0 = Math.min(0, ...pv), p1 = Math.max(0, ...pv); const pp = Math.max((p1 - p0) * 0.15, 0.01); p0 -= pp; p1 += pp;
+  const yN = (v) => T + (1 - (v - n0) / (n1 - n0)) * (H - T - B), yP = (v) => T + (1 - (v - p0) / (p1 - p0)) * (H - T - B);
+  const step = (ys) => pts.map((p, i) => (i ? `H${x(p.t).toFixed(1)}V${ys(p).toFixed(1)}` : `M${x(p.t).toFixed(1)},${ys(p).toFixed(1)}`)).join("");
+  const navPath = step((p) => yN(p.nav)), pnlPath = step((p) => yP(p.pnl));
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((g) => { const y = T + g * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#1f2a37"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" fill="#8b98a5" font-size="11">${(n1 - g * (n1 - n0)).toFixed(2)}</text><text x="${W - R + 6}" y="${y + 4}" fill="#ffb547" font-size="11">${(p1 - g * (p1 - p0)).toFixed(2)}</text>`; }).join("");
+  const fmtT = (t) => { const d = new Date(t * 1000); return (t1 - t0 > 86400 ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " : "") + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
+  const xt = [0, 0.33, 0.66, 1].map((g) => `<text x="${L + g * (W - L - R)}" y="${H - B + 16}" text-anchor="${g === 0 ? "start" : g === 1 ? "end" : "middle"}" fill="#8b98a5" font-size="11">${fmtT(t0 + g * (t1 - t0))}</text>`).join("");
+  const col = { arb: "#5aa9ff", trade: "#9be7cf", blocked: "#ff5d6c" };
+  const mk = marks.map((m) => `<line x1="${x(m.t).toFixed(1)}" x2="${x(m.t).toFixed(1)}" y1="${H - B + 22}" y2="${H - B + 34}" stroke="${col[m.k]}" stroke-width="2"/>`).join("");
+  const zero = p0 < 0 && p1 > 0 ? `<line x1="${L}" x2="${W - R}" y1="${yP(0)}" y2="${yP(0)}" stroke="#ffb547" stroke-opacity=".25" stroke-dasharray="4 4"/>` : "";
+  const last = pts.at(-1);
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Vault NAV and cumulative P&L over time">${grid}${zero}
+    <path d="${navPath}V${H - B}H${L}Z" fill="#38e1b0" fill-opacity=".08"/>
+    <path d="${navPath}" fill="none" stroke="#38e1b0" stroke-width="2.2"/>
+    <path d="${pnlPath}" fill="none" stroke="#ffb547" stroke-width="1.8" stroke-dasharray="5 3"/>
+    <circle cx="${x(last.t)}" cy="${yN(last.nav)}" r="4" fill="#38e1b0"/>
+    ${xt}${mk}</svg>`;
+}
+
+const FILTERS = [["all", "All"], ["trade", "Swaps"], ["arb", "Arbitrage"], ["blocked", "Blocked"], ["hold", "Holds"], ["admin", "Owner actions"]];
+function tabs() {
+  const n = (k) => k === "all" ? LOGS.length : LOGS.filter(({ ev }) => KIND(ev.name) === k).length;
+  $("tabs").innerHTML = FILTERS.map(([k, t]) => `<span class="tab ${filter === k ? "on" : ""}" data-k="${k}">${t} ${n(k)}</span>`).join("");
+}
 async function feed() {
-  const latest = await provider.getBlockNumber(); const logs = [];
-  for (let s = D.vaultDeployBlock; s <= latest; s += 50000) logs.push(...await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 49999) }));
+  tabs();
   const items = [];
-  for (const l of logs.reverse().slice(0, 60)) {
-    let ev; try { ev = vault.interface.parseLog(l); } catch { continue; } if (!ev) continue; const a = ev.args; let cls = "decision", t = ev.name, m = "";
+  const sel = LOGS.filter(({ ev }) => filter === "all" || KIND(ev.name) === filter).slice().reverse().slice(0, 60);
+  for (const { l, ev } of sel) {
+    const a = ev.args; let cls = "decision", t = ev.name, m = "";
     const S = (x) => sym[x.toLowerCase()] || short(x);
     if (ev.name === "TradeExecuted") { cls = "trade"; t = `✓ Trade #${a.id}: ${f(E(a.amountIn), 6)} ${S(a.tokenIn)} → ${f(E(a.amountOut), 6)} ${S(a.tokenOut)} (${Number(a.fee) / 1e4}% pool)`; m = `${a.memo} · min-out enforced ${f(E(a.minAmountOut), 6)} · realized ${f(E(a.realizedPnl), 4)} USDT` + await verifyReason(a.reasonHash); }
     else if (ev.name === "ArbitrageExecuted") { cls = "arb"; t = `⇄ Arbitrage #${a.id}: ${f(E(a.amountIn), 6)} → ${f(E(a.amountOut), 6)} ${S(a.tokenA)} (sell ${Number(a.feeSell) / 1e4}% / buy ${Number(a.feeBuy) / 1e4}%)`; m = `+${f((E(a.amountOut) / E(a.amountIn) - 1) * 100, 2)}% · ${a.memo}` + await verifyReason(a.reasonHash); }
@@ -228,10 +329,11 @@ async function feed() {
     else if (ev.name === "Unpaused") { cls = "params"; t = "▶ Resumed by owner"; }
     else if (ev.name === "StopLossTriggered") { cls = "blocked"; t = "Stop-loss enforced"; }
     else if (ev.name === "Deposited") { t = `Deposit ${f(E(a.amount), 6)} ${S(a.token)}`; m = `valued ${f(E(a.value), 4)} USDT`; }
+    else if (ev.name === "Withdrawn") { t = `Withdrawal ${f(E(a.amount), 6)} ${S(a.token)}`; }
     else continue;
     items.push(`<div class="ev ${cls}"><div class="t">${t}</div><div class="m">${m}</div><div class="m">block ${l.blockNumber} · ${tx(l.transactionHash)}</div></div>`);
   }
-  $("feed").innerHTML = items.join("") || '<div class="note">No events yet.</div>';
+  $("feed").innerHTML = items.join("") || '<div class="note">No events of this kind yet.</div>';
 }
 
 function addMsg(text, who) {
@@ -256,7 +358,7 @@ async function send() {
   } catch (e) { w.remove(); addMsg("Agent unreachable: " + e.message, "a"); }
 }
 $("connect").onclick = async () => {
-  if (!window.ethereum) return alert("No injected wallet found");
+  if (!window.ethereum) return alert("No browser wallet found. The dashboard works read-only without one; a wallet is only needed for the owner's kill switch.");
   const bp = new ethers.BrowserProvider(window.ethereum);
   try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x85" }] }); }
   catch { await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0x85", chainName: "HSK Chain Testnet", nativeCurrency: { name: "HSK", symbol: "HSK", decimals: 18 }, rpcUrls: [D.rpc], blockExplorerUrls: [D.explorer] }] }); }
@@ -264,7 +366,7 @@ $("connect").onclick = async () => {
 };
 $("pauseBtn").onclick = async () => { await (await vault.connect(signer).pause("owner kill switch from dashboard")).wait(); refresh(); };
 $("unpauseBtn").onclick = async () => { await (await vault.connect(signer).unpause()).wait(); refresh(); };
-init();
+init().catch((e) => { const b = $("banner"); b.style.display = "block"; b.textContent = "Could not load deployments.json or reach the chain: " + (e.message || e); });
 </script>
 </body>
 </html>

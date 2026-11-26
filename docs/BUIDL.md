@@ -9,7 +9,7 @@
 **Links**
 - GitHub: https://github.com/Mofofk/leash-hsk-agent (private until approved for publishing)
 - Dashboard (static, reads the chain): https://raw.githack.com/Mofofk/leash-hsk-agent/main/dashboard/index.html (works once the repo is public)
-- Demo video: docs/Leash_HSK_demo.mp4 (upload to YouTube/X and paste the link)
+- Demo video: docs/Leash_HSK_demo.mp4, 2:46 with captions (upload to YouTube/X and paste the link)
 - Vault (HSK testnet, verified): https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A
 
 ---
@@ -38,9 +38,12 @@ AI agents can now trade by themselves. One bad prompt, one hallucination, or one
 
 **Chat.** You talk to it in plain words: "be conservative, max 0.5 USDT a trade, 5% stop-loss", "trade at most 10 times a day", "what's my P&L?", "pause". Gemini turns that into on-chain parameter updates, and your sentence is stored on-chain with the change.
 
-**Dashboard.** NAV, realized and unrealized P&L, positions with cost basis, live limits, queued loosenings, market signals, and an on-chain decision log with verified reasoning. You can connect a wallet; the owner gets the kill switch.
+**Dashboard.** A static page that reads the chain, no wallet needed, mobile-friendly. A track record rebuilt from on-chain events, with a NAV and P&L chart read from the vault at each event's block. Also NAV, realized and unrealized P&L, positions with cost basis, live limits, queued loosenings, market signals, and an on-chain decision log with verified reasoning. You can connect a wallet; the owner gets the kill switch.
 
 **Proof on HSK testnet (real transactions)**
+- Autonomous arbitrage chosen in the agent loop: https://testnet-explorer.hskchain.net/tx/0xf2c460ca566e2d7af649d9865912bc9f1da0e51a8b2e0f14684c5c43b022579f
+- Autonomous hold with a published reasoning hash: https://testnet-explorer.hskchain.net/tx/0xe58294b26479ae5d4a0e5651a8d0940ad629d5dd1c5d84ad158dbd9b35cd58ce
+- Oversized order blocked on-chain (TRADE_TOO_LARGE): https://testnet-explorer.hskchain.net/tx/0xaf7006376f7f17e2d458039f5fcfba4adf19eed2cdb93e5d6c2416866c83480f
 - Trade executed: https://testnet-explorer.hskchain.net/tx/0x425e25eed1e3e69df8dd50c813a591b060285ddc60768d9752f52150057c1e16
 - Atomic arbitrage: https://testnet-explorer.hskchain.net/tx/0x2774bc3ea9588b946ebd8dd0bdeccdf7b8ed13097698736f89caab4bf6bb6e07
 - Trade blocked on-chain (TRADE_TOO_LARGE): https://testnet-explorer.hskchain.net/tx/0x269ad66d985ffb13ee9ba44f1236de3ccff77870587f7bc7a2d25b1037e6211b
@@ -49,12 +52,12 @@ AI agents can now trade by themselves. One bad prompt, one hallucination, or one
 - Kill switch: https://testnet-explorer.hskchain.net/tx/0xe7cf5fc7fada41bdb94d6efde0eebcb693742dfcb888cfe939159bc0949daa4d
 
 **Technical maturity**
-- 34 Foundry tests. 33 run on a fork of the live HSK testnet HSKSwap pools: stop-loss, daily loss breaker, kill switch, manipulation guard, oracle and depeg guards, timelock, arbitrage, and a TWAP-floor fuzz test. The last one is a mainnet dry run against the real APRO feeds.
+- 34 Foundry tests, one command (`./quickstart.sh`). 33 run on a fork of the live HSK testnet HSKSwap pools: stop-loss, daily loss breaker, kill switch, manipulation guard, oracle and depeg guards, timelock, arbitrage, and a TWAP-floor fuzz test. The last one is a mainnet dry run against the real APRO feeds.
 - The contract is verified on HSK Blockscout.
 - The mainnet deploy script is ready (chain 177, APRO wired in, 1-hour loosening timelock).
 
 **Officially recommended products used:** HSKSwap (SwapRouter02, QuoterV2, V3 pools, factory, `@hskswap/sdk-core` addresses), HSK Chain testnet and faucet, HSK Blockscout verification, the APRO oracle (listed in the HSK Chain docs), HashKey Global market data. The owner can be a Safe.
 
-**Honest notes:** Testnet pool prices are synthetic (WHSK is about 78 USDT on one tier and 54 on the other), so we claim no market profit. The code is not audited. The demo server signs limit changes with the owner key; in production the user's own wallet signs them.
+**Honest notes:** Testnet pool prices are synthetic (WHSK is about 78 USDT on one tier and 54 on the other), so we claim no market profit. The on-chain track record is a short testnet run (a handful of trades, blocks and holds), not a backtest. The code is not audited. The demo server signs limit changes with the owner key; in production the user's own wallet signs them.
 
 **Team:** Ajay Kumar, India · X @coolajay0099 · Telegram Coolboi0099
