@@ -9,6 +9,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const html = fs.readFileSync(path.join(ROOT, "dashboard/index.html"), "utf8");
 const ABI = eval(html.match(/const ABI = (\[[\s\S]*?\n\]);/)[1]);
 const POOL_ABI = eval(html.match(/const POOL_ABI = (\[[^\n]*\]);/)[1]);
+const LEND_ABI = eval(html.match(/const LEND_ABI = (\[[^\n]*\]);/)[1]);
 
 // keep identical to rk() in dashboard/index.html
 export function rk(q) {
@@ -49,6 +50,8 @@ export async function writeSnapshot() {
     const raw = await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 4999) });
     for (const l of raw) { let ev = null; try { ev = vault.interface.parseLog(l); } catch {} if (ev) LOGS.push({ l, ev }); }
   }
+  // Borrow section: LeashLend pool stats (read-only view)
+  if (D.lend) { try { await new ethers.Contract(D.lend.address, LEND_ABI, provider).stats({ blockTag: "latest" }); } catch {} }
   for (const p of Object.values(D.pools)) {
     const pool = new ethers.Contract(p.address, POOL_ABI, provider);
     await Promise.all([pool.slot0(), pool.token0()]); try { await pool.observe([300, 0]); } catch {}

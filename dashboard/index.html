@@ -3,129 +3,321 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
 <title>Leash · AI trading agent on an on-chain leash · HSK Chain</title>
 <script src="vendor/ethers.umd.min.js"></script>
 <style>
-  :root { --bg:#0b0f14; --panel:#121821; --line:#1f2a37; --text:#e6edf3; --mute:#8b98a5; --accent:#38e1b0; --warn:#ffb547; --bad:#ff5d6c; --blue:#5aa9ff; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  a { color: var(--blue); text-decoration: none; } a:hover { text-decoration: underline; }
-  header { display:flex; align-items:center; gap:14px; padding:14px 22px; border-bottom:1px solid var(--line); position:sticky; top:0; background:rgba(11,15,20,.92); backdrop-filter: blur(6px); z-index:5; }
-  .logo { font-weight:800; font-size:20px; letter-spacing:.3px; } .logo span { color: var(--accent); }
-  .tag { color:var(--mute); font-size:13px; }
-  .pill { padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; border:1px solid var(--line); }
-  .pill.ok { color:#06281f; background:var(--accent); border-color:var(--accent); } .pill.bad { color:#fff; background:var(--bad); border-color:var(--bad); }
+  :root {
+    --bg:#07090d; --bg2:#0b0f15; --panel:#10151d; --panel2:#0c1118; --line:rgba(148,163,184,.10); --line2:rgba(148,163,184,.18);
+    --text:#e8edf3; --mute:#8a97a8; --dim:#5f6b7a; --accent:#34e0a8; --accent2:#22c58f; --accentbg:rgba(52,224,168,.10);
+    --warn:#f5b54a; --warnbg:rgba(245,181,74,.10); --bad:#ff5c6c; --badbg:rgba(255,92,108,.10); --blue:#6aa8ff; --bluebg:rgba(106,168,255,.10);
+    --r:16px; --r2:12px; --gap:20px;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --monof: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  html, body { overflow-x:hidden; }
+  body { margin:0; color:var(--text); font:14px/1.5 var(--sans); -webkit-font-smoothing:antialiased;
+    background: radial-gradient(1200px 600px at 10% -10%, rgba(52,224,168,.07), transparent 60%), radial-gradient(900px 500px at 100% 0%, rgba(106,168,255,.06), transparent 60%), var(--bg); background-attachment: fixed; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-decoration:underline; }
+  .mono { font-family:var(--monof); font-size:12px; }
+  .pos { color:var(--accent); } .neg { color:var(--bad); }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* header */
+  header { position:sticky; top:0; z-index:10; background:rgba(7,9,13,.78); backdrop-filter:saturate(140%) blur(12px); -webkit-backdrop-filter:saturate(140%) blur(12px); border-bottom:1px solid var(--line); }
+  .hwrap { max-width:1440px; margin:0 auto; display:flex; align-items:center; gap:18px; padding:12px 28px; }
+  .brand { display:flex; align-items:center; gap:10px; }
+  .mark { width:30px; height:30px; border-radius:9px; display:grid; place-items:center; background:linear-gradient(135deg, var(--accent), #1aa37a); box-shadow:0 0 0 1px rgba(255,255,255,.08) inset, 0 6px 18px rgba(52,224,168,.25); }
+  .logo { font-weight:750; font-size:18px; letter-spacing:-.01em; } .logo span { color:var(--accent); }
+  .tag { color:var(--mute); font-size:12.5px; border-left:1px solid var(--line2); padding-left:14px; white-space:nowrap; }
+  @media (max-width: 1380px) { .tag { display:none; } }
+  nav.links { display:flex; gap:2px; margin-left:8px; }
+  nav.links a { color:var(--mute); font-weight:550; font-size:13px; padding:6px 10px; border-radius:8px; }
+  nav.links a:hover { color:var(--text); background:rgba(255,255,255,.04); text-decoration:none; }
   .grow { flex:1; }
-  button { background:#1b2430; color:var(--text); border:1px solid #2b394a; padding:7px 12px; border-radius:8px; cursor:pointer; font-weight:600; }
-  button:hover { border-color: var(--accent); } button.primary { background:var(--accent); color:#06281f; border-color:var(--accent); } button.danger { background:#3a1218; border-color:var(--bad); color:#ffd7db; }
-  main { display:grid; grid-template-columns: 1.6fr 1fr; gap:16px; padding:16px 22px 40px; max-width:1500px; margin:0 auto; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
-  .card h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--mute); display:flex; align-items:center; gap:8px; }
-  .kpis { display:grid; grid-template-columns: repeat(4, 1fr); gap:12px; }
-  .kpi .v { font-size:24px; font-weight:800; } .kpi .s { color:var(--mute); font-size:12px; }
-  .pos { color: var(--accent); } .neg { color: var(--bad); }
-  table { width:100%; border-collapse:collapse; } th, td { text-align:right; padding:7px 6px; border-bottom:1px solid var(--line); white-space:nowrap; } th:first-child, td:first-child { text-align:left; } th { color:var(--mute); font-weight:600; font-size:12px; }
-  .limits { display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
-  .limit { background:#0e141c; border:1px solid var(--line); border-radius:9px; padding:8px 10px; } .limit .k { color:var(--mute); font-size:11px; text-transform:uppercase; letter-spacing:.05em; } .limit .v { font-size:17px; font-weight:700; } .limit .c { color:#5d6b79; font-size:11px; }
-  .feed { max-height: 520px; overflow:auto; }
-  .ev { border-left:3px solid var(--line); padding:7px 10px; margin:6px 0; background:#0e141c; border-radius:0 8px 8px 0; }
-  .ev.trade { border-color: var(--accent); } .ev.blocked { border-color: var(--bad); background:#1a0f13; } .ev.arb { border-color: var(--blue); } .ev.params { border-color: var(--warn); } .ev.decision { border-color:#6b7785; }
-  .ev .t { font-weight:700; } .ev .m { color:var(--mute); font-size:12.5px; } .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
-  .chat { display:flex; flex-direction:column; height: 560px; }
-  .msgs { flex:1; overflow:auto; padding-right:4px; }
-  .msg { margin:8px 0; padding:9px 11px; border-radius:10px; white-space:pre-wrap; word-break:break-word; }
-  .msg.u { background:#1d3a32; margin-left:40px; } .msg.a { background:#16202b; margin-right:20px; }
-  .msg a { word-break: break-all; }
-  .chatin { display:flex; gap:8px; margin-top:8px; } .chatin input { flex:1; background:#0e141c; border:1px solid #2b394a; color:var(--text); border-radius:8px; padding:9px 10px; font-size:14px; }
-  .sig { display:grid; grid-template-columns: 1fr 1fr; gap:8px; } .sig .limit .v { font-size:16px; }
-  .note { color:#5d6b79; font-size:11.5px; margin-top:8px; }
-  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; } .chip { font-size:12px; padding:4px 8px; border-radius:999px; background:#0e141c; border:1px solid var(--line); cursor:pointer; } .chip:hover { border-color:var(--accent); }
-  .ok-badge { color: var(--accent); font-size: 11px; }
-  .chartwrap { position:relative; width:100%; }
-  .chartwrap svg { width:100%; height:auto; display:block; }
-  .legend { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--mute); margin-top:6px; }
-  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
-  .record { display:grid; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:10px; }
+  .pill { display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border-radius:999px; font-size:12px; font-weight:600; border:1px solid var(--line2); color:var(--mute); background:rgba(255,255,255,.02); white-space:nowrap; }
+  .pill::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dim); }
+  .pill.ok { color:var(--accent); border-color:rgba(52,224,168,.35); background:var(--accentbg); } .pill.ok::before { background:var(--accent); box-shadow:0 0 8px var(--accent); }
+  .pill.bad { color:#ffd3d8; border-color:rgba(255,92,108,.45); background:var(--badbg); } .pill.bad::before { background:var(--bad); box-shadow:0 0 8px var(--bad); }
+  #net::before { background:var(--blue); box-shadow:0 0 8px var(--blue); }
+  #net.snap::before { background:var(--warn); box-shadow:0 0 8px var(--warn); }
+
+  button { font:inherit; font-weight:600; font-size:13px; background:#161d27; color:var(--text); border:1px solid var(--line2); padding:8px 14px; border-radius:10px; cursor:pointer; transition:border-color .15s, background .15s, transform .05s; }
+  button:hover:not(:disabled) { border-color:rgba(52,224,168,.5); background:#1a2330; }
+  button:active:not(:disabled) { transform:translateY(1px); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:linear-gradient(180deg, var(--accent), var(--accent2)); color:#04231a; border-color:transparent; }
+  button.primary:hover:not(:disabled) { background:linear-gradient(180deg, #4ef0bb, var(--accent)); border-color:transparent; }
+  button.danger { background:var(--badbg); border-color:rgba(255,92,108,.5); color:#ffd3d8; }
+  button.ghost { background:transparent; }
+  button.sm { padding:5px 9px; font-size:12px; border-radius:8px; }
+  #connect { min-width:132px; white-space:nowrap; }
+
+  .banner { display:none; max-width:1440px; margin:14px auto 0; padding:10px 14px; border-radius:var(--r2); border:1px solid rgba(245,181,74,.35); color:#ffd99a; background:var(--warnbg); font-size:13px; }
+  .bannerwrap { padding:0 28px; }
+
+  /* layout */
+  main { max-width:1440px; margin:0 auto; padding:22px 28px 56px; display:flex; flex-direction:column; gap:var(--gap); }
+  .pagehead { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .pagehead h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:-.015em; }
+  .pagehead p { margin:3px 0 0; color:var(--mute); font-size:13px; }
+  .cols { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:var(--gap); align-items:start; }
+  .stack { display:flex; flex-direction:column; gap:var(--gap); min-width:0; }
+  .card { background:linear-gradient(180deg, rgba(255,255,255,.015), transparent 40%), var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; min-width:0; box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 10px 30px rgba(0,0,0,.25); }
+  .chead { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+  .card h2 { margin:0; font-size:15px; font-weight:650; letter-spacing:-.005em; display:flex; align-items:center; gap:8px; }
+  .card h2 .ic { width:22px; height:22px; border-radius:7px; display:grid; place-items:center; background:rgba(255,255,255,.05); color:var(--mute); font-size:12px; }
+  .sub { color:var(--mute); font-size:12.5px; margin-top:2px; }
+  .badge { font-size:11px; font-weight:650; padding:3px 8px; border-radius:999px; background:rgba(255,255,255,.05); color:var(--mute); border:1px solid var(--line); white-space:nowrap; }
+  .badge.g { color:var(--accent); background:var(--accentbg); border-color:rgba(52,224,168,.25); }
+  .badge.w { color:var(--warn); background:var(--warnbg); border-color:rgba(245,181,74,.25); }
+
+  /* KPIs */
+  .kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:var(--gap); }
+  .kpi { padding:16px 18px; }
+  .kpi .s { color:var(--mute); font-size:12.5px; }
+  .kpi .lbl { display:flex; align-items:center; gap:8px; color:var(--mute); font-size:12.5px; font-weight:550; }
+  .kpi .lbl i { width:8px; height:8px; border-radius:3px; display:inline-block; }
+  .kpi .v { font-size:28px; font-weight:700; letter-spacing:-.02em; margin:6px 0 2px; font-variant-numeric:tabular-nums; }
+
+  /* tiles (limits, signals, records, pool stats) */
+  .limits { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+  .limit { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:11px 13px; min-width:0; }
+  .limit .k { color:var(--mute); font-size:11.5px; font-weight:550; }
+  .limit .v { font-size:17px; font-weight:650; margin-top:2px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .limit .c { color:var(--dim); font-size:11.5px; margin-top:1px; }
+  .sig { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; }
+  .record { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:10px; margin-bottom:14px; }
   .record .limit .v { font-size:20px; }
-  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 8px; } .tab { font-size:12px; padding:4px 9px; border-radius:999px; background:#0e141c; border:1px solid var(--line); cursor:pointer; color:var(--mute); } .tab.on { color:var(--text); border-color:var(--accent); }
-  .skel { color:#5d6b79; font-size:13px; padding:18px 4px; text-align:center; }
-  .skel::before { content:""; display:inline-block; width:10px; height:10px; margin-right:8px; border-radius:50%; border:2px solid #2b394a; border-top-color:var(--accent); animation:spin .9s linear infinite; vertical-align:-1px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .banner { display:none; margin:12px 22px 0; padding:9px 12px; border-radius:9px; border:1px solid var(--warn); color:var(--warn); background:#231b0c; font-size:13px; }
-  .tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  main > section, .card { min-width:0; } html, body { overflow-x:hidden; }
-  @media (max-width: 1100px) { main { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2,1fr);} }
+  .note { color:var(--dim); font-size:12px; margin-top:12px; line-height:1.5; }
+
+  /* table */
+  .tscroll { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -4px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:right; padding:10px 8px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child, td:first-child { text-align:left; }
+  th { color:var(--dim); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; }
+  tbody tr:last-child td { border-bottom:0; }
+  tbody tr:hover td { background:rgba(255,255,255,.015); }
+
+  /* chart */
+  .chartwrap { position:relative; width:100%; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:8px 6px 2px; }
+  .chartwrap svg { width:100%; height:auto; display:block; }
+  .legend { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--mute); margin-top:10px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+
+  /* feed */
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 10px; }
+  .tab { font-size:12px; font-weight:600; padding:5px 10px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; color:var(--mute); user-select:none; }
+  .tab:hover { color:var(--text); } .tab.on { color:var(--text); border-color:rgba(52,224,168,.45); background:var(--accentbg); }
+  .feed { max-height:560px; overflow:auto; padding-right:4px; }
+  .ev { position:relative; padding:10px 12px 10px 14px; margin:8px 0; background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); }
+  .ev::before { content:""; position:absolute; left:0; top:10px; bottom:10px; width:3px; border-radius:0 3px 3px 0; background:var(--dim); }
+  .ev.trade::before { background:var(--accent); } .ev.blocked { background:linear-gradient(90deg, rgba(255,92,108,.06), transparent 60%), var(--panel2); } .ev.blocked::before { background:var(--bad); }
+  .ev.arb::before { background:var(--blue); } .ev.params::before { background:var(--warn); }
+  .ev .t { font-weight:650; font-size:13.5px; } .ev .m { color:var(--mute); font-size:12.5px; margin-top:2px; overflow-wrap:anywhere; }
+  .ok-badge { color:var(--accent); font-size:11px; font-weight:650; }
+
+  /* chat */
+  .chat { display:flex; flex-direction:column; height:600px; }
+  .msgs { flex:1; overflow:auto; padding:2px 4px 2px 0; }
+  .msg { margin:10px 0; padding:10px 13px; border-radius:14px; white-space:pre-wrap; word-break:break-word; font-size:13.5px; max-width:92%; }
+  .msg.u { background:linear-gradient(180deg, rgba(52,224,168,.16), rgba(52,224,168,.10)); border:1px solid rgba(52,224,168,.22); margin-left:auto; border-bottom-right-radius:4px; }
+  .msg.a { background:var(--panel2); border:1px solid var(--line); margin-right:auto; border-bottom-left-radius:4px; }
+  .msg a { word-break:break-all; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+  .chip { font-size:12px; padding:5px 10px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; color:var(--mute); }
+  .chip:hover { border-color:rgba(52,224,168,.45); color:var(--text); }
+  .chatin { display:flex; gap:8px; margin-top:10px; }
+  input.in, .chatin input { flex:1; min-width:0; background:var(--panel2); border:1px solid var(--line2); color:var(--text); border-radius:10px; padding:10px 12px; font:inherit; font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s; }
+  input.in:focus, .chatin input:focus { border-color:rgba(52,224,168,.55); box-shadow:0 0 0 3px rgba(52,224,168,.12); }
+
+  /* owner controls */
+  #ownerctl { display:none; margin-top:14px; gap:10px; align-items:center; flex-wrap:wrap; padding:12px; border-radius:var(--r2); border:1px dashed rgba(255,92,108,.35); background:rgba(255,92,108,.04); }
+
+  /* borrow */
+  .lend { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); gap:16px; }
+  .lstats { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; align-content:start; }
+  .lstats .wide { grid-column:1/-1; }
+  .pane { background:var(--panel2); border:1px solid var(--line); border-radius:var(--r2); padding:14px; min-width:0; }
+  .pane h3 { margin:0 0 10px; font-size:13px; font-weight:650; color:var(--text); display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .kv { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px 14px; }
+  .kv div .k { color:var(--dim); font-size:11.5px; } .kv div .v { font-weight:650; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+  .hf { margin:14px 0 4px; }
+  .hfrow { display:flex; justify-content:space-between; align-items:baseline; font-size:12.5px; color:var(--mute); }
+  .hfrow b { font-size:18px; color:var(--text); font-variant-numeric:tabular-nums; }
+  .bar { position:relative; height:8px; border-radius:999px; background:rgba(255,255,255,.06); overflow:hidden; margin-top:8px; }
+  .bar > i { position:absolute; left:0; top:0; bottom:0; width:0; border-radius:999px; background:var(--accent); transition:width .4s, background .4s; }
+  .bar .tick { position:absolute; top:-2px; bottom:-2px; width:2px; background:rgba(255,255,255,.35); }
+  .barlbl { display:flex; justify-content:space-between; color:var(--dim); font-size:11px; margin-top:4px; }
+  .acts { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; margin-top:12px; }
+  .act { background:rgba(255,255,255,.015); border:1px solid var(--line); border-radius:var(--r2); padding:11px; min-width:0; }
+  .act .ah { display:flex; justify-content:space-between; align-items:baseline; gap:6px; font-size:12.5px; font-weight:650; margin-bottom:8px; }
+  .act .ah span { color:var(--dim); font-weight:500; font-size:11.5px; }
+  .act .row { display:flex; gap:6px; }
+  .act .row input.in { padding:8px 10px; font-size:13px; }
+  .act .btns { display:flex; gap:6px; margin-top:8px; } .act .btns button { flex:1; }
+  .lmsg { margin-top:12px; font-size:12.5px; border-radius:10px; padding:9px 11px; display:none; overflow-wrap:anywhere; }
+  .lmsg.info { display:block; background:var(--bluebg); border:1px solid rgba(106,168,255,.3); color:#cfe0ff; }
+  .lmsg.ok { display:block; background:var(--accentbg); border:1px solid rgba(52,224,168,.3); color:#c9f7e7; }
+  .lmsg.err { display:block; background:var(--badbg); border:1px solid rgba(255,92,108,.35); color:#ffd3d8; }
+  .empty { text-align:center; padding:22px 10px; color:var(--mute); font-size:13px; }
+  .empty b { display:block; color:var(--text); font-size:14px; margin-bottom:4px; }
+
+  .skel { color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
+  .skel::before { content:""; display:inline-block; width:10px; height:10px; margin-right:8px; border-radius:50%; border:2px solid var(--line2); border-top-color:var(--accent); animation:spin .9s linear infinite; vertical-align:-1px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  footer { max-width:1440px; margin:0 auto; padding:0 28px 40px; color:var(--dim); font-size:12px; display:flex; gap:16px; flex-wrap:wrap; justify-content:space-between; }
+
+  @media (max-width: 1180px) {
+    .cols { grid-template-columns:minmax(0,1fr); }
+    .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .chat { height:560px; }
+    nav.links { display:none; }
+  }
+  @media (max-width: 860px) { .lend { grid-template-columns:minmax(0,1fr); } .tag { display:none; } }
   @media (max-width: 640px) {
-    header { flex-wrap:wrap; padding:10px 12px; gap:8px; position:static; } .tag { display:none; } .grow { display:none; }
-    #net { font-size:11px; } main { padding:12px 10px 30px; gap:12px; } .card { padding:12px; }
-    .kpi .v { font-size:20px; } .limits { grid-template-columns: repeat(2, 1fr); } .sig { grid-template-columns: 1fr; }
-    .record { grid-template-columns: repeat(3, 1fr); } .record .limit .v { font-size:17px; }
-    .chat { height:auto; } .msgs { max-height:320px; } .feed { max-height:420px; }
-    .card h2 { flex-wrap:wrap; } .banner { margin:10px 10px 0; }
+    :root { --gap:14px; }
+    .hwrap { flex-wrap:wrap; padding:10px 14px; gap:8px; } .grow { display:none; } header { position:static; }
+    #net { font-size:11px; } .bannerwrap { padding:0 14px; }
+    main { padding:16px 14px 40px; } .card { padding:14px; }
+    .kpi .v { font-size:22px; } .limits { grid-template-columns:repeat(2, minmax(0,1fr)); } .sig { grid-template-columns:minmax(0,1fr); }
+    .record { grid-template-columns:repeat(3, minmax(0,1fr)); } .record .limit .v { font-size:17px; }
+    .kv { grid-template-columns:repeat(2, minmax(0,1fr)); } .acts { grid-template-columns:minmax(0,1fr); }
+    .chat { height:auto; } .msgs { max-height:340px; } .feed { max-height:440px; }
+    footer { padding:0 14px 30px; }
   }
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">Leash<span>.</span></div>
-  <div class="tag">AI trading agent on HSKSwap — every limit enforced on-chain</div>
-  <div class="grow"></div>
-  <span class="pill" id="net">HSK Chain Testnet · 133</span>
-  <span class="pill" id="status">…</span>
-  <button id="connect">Connect wallet</button>
+  <div class="hwrap">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#04231a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7a4 4 0 1 1 4 4H9v6"/><circle cx="9" cy="19" r="2"/></svg></div>
+      <div class="logo">Leash<span>.</span></div>
+    </div>
+    <div class="tag">AI trading agent on HSKSwap · every limit enforced on-chain</div>
+    <nav class="links"><a href="#overview">Overview</a><a href="#borrow">Borrow</a><a href="#agent">Agent</a><a href="#log">Log</a></nav>
+    <div class="grow"></div>
+    <span class="pill" id="net">HSK Chain Testnet · 133</span>
+    <span class="pill" id="status">Connecting…</span>
+    <button class="primary" id="connect">Connect wallet</button>
+  </div>
 </header>
-<div class="banner" id="banner"></div>
+<div class="bannerwrap"><div class="banner" id="banner"></div></div>
 <main>
-  <section style="display:flex; flex-direction:column; gap:16px;">
-    <div class="card">
-      <div class="kpis">
-        <div class="kpi"><div class="s">Vault NAV (TWAP)</div><div class="v" id="nav">–</div><div class="s" id="navsub">USDT</div></div>
-        <div class="kpi"><div class="s">Total P&amp;L</div><div class="v" id="pnl">–</div><div class="s" id="pnlsub">realized / unrealized</div></div>
-        <div class="kpi"><div class="s">Trades executed</div><div class="v" id="trades">–</div><div class="s" id="tradesub">today</div></div>
-        <div class="kpi"><div class="s">Blocked by the vault</div><div class="v neg" id="blocked">–</div><div class="s">agent requests refused on-chain</div></div>
+  <div class="pagehead" id="overview">
+    <div><h1>Vault overview</h1><p>An LLM trades a LeashVault on HSKSwap; the contract enforces every risk limit. Testnet, test tokens only.</p></div>
+    <span class="badge w">HSK Chain testnet · no real funds</span>
+  </div>
+
+  <div class="kpis">
+    <div class="card kpi"><div class="lbl"><i style="background:var(--accent)"></i>Vault NAV</div><div class="v" id="nav">–</div><div class="s" id="navsub">USDT</div></div>
+    <div class="card kpi"><div class="lbl"><i style="background:var(--warn)"></i>Total P&amp;L</div><div class="v" id="pnl">–</div><div class="s" id="pnlsub">realized / unrealized</div></div>
+    <div class="card kpi"><div class="lbl"><i style="background:var(--blue)"></i>Trades executed</div><div class="v" id="trades">–</div><div class="s" id="tradesub">today</div></div>
+    <div class="card kpi"><div class="lbl"><i style="background:var(--bad)"></i>Blocked by the vault</div><div class="v neg" id="blocked">–</div><div class="s">agent requests refused on-chain</div></div>
+  </div>
+
+  <div class="cols">
+    <div class="stack">
+      <div class="card">
+        <div class="chead"><div><h2><span class="ic">↗</span>Track record</h2><div class="sub">Rebuilt from on-chain events · NAV read at each event's block</div></div></div>
+        <div class="record" id="record"><div class="skel" style="grid-column:1/-1">Reading the vault's history from HSK Chain…</div></div>
+        <div class="chartwrap" id="chart"></div>
+        <div class="legend"><span><i style="background:var(--accent)"></i>NAV (USDT, at pool TWAP)</span><span><i style="background:var(--warn)"></i>Cumulative P&amp;L</span><span><i style="background:var(--blue)"></i>Arbitrage</span><span><i style="background:#9be7cf"></i>Swap</span><span><i style="background:var(--bad)"></i>Blocked request</span></div>
+        <div class="note">Testnet pool prices are synthetic (the two fee tiers sit far apart), so arbitrage gains here prove the mechanics, not market profit.</div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><div><h2><span class="ic">◧</span>Positions</h2><div class="sub">Vault holdings valued at the pool TWAP</div></div></div>
+        <div class="tscroll"><table><thead><tr><th>Asset</th><th>Balance</th><th>Cost basis</th><th>Value</th><th>TWAP price</th><th>Spot price</th><th>Weight</th><th>Unrealized</th></tr></thead><tbody id="positions"><tr><td colspan="8"><div class="skel">Loading positions…</div></td></tr></tbody></table></div>
       </div>
     </div>
-    <div class="card">
-      <h2>Track record <span class="mono" style="text-transform:none;letter-spacing:0">(rebuilt from on-chain events · NAV read at each event's block)</span></h2>
-      <div class="record" id="record"><div class="skel" style="grid-column:1/-1">Reading the vault's history from HSK Chain…</div></div>
-      <div class="chartwrap" id="chart"></div>
-      <div class="legend"><span><i style="background:var(--accent)"></i>NAV (USDT, at pool TWAP)</span><span><i style="background:var(--warn)"></i>Cumulative P&amp;L</span><span><i style="background:var(--blue)"></i>arbitrage</span><span><i style="background:#9be7cf"></i>swap</span><span><i style="background:var(--bad)"></i>blocked request (ticks under the chart)</span></div>
-      <div class="note">Testnet pool prices are synthetic (the two fee tiers sit far apart), so arbitrage gains here prove the mechanics, not market profit.</div>
-    </div>
-    <div class="card">
-      <h2>Positions</h2>
-      <div class="tscroll"><table><thead><tr><th>Asset</th><th>Balance</th><th>Cost basis</th><th>Value</th><th>TWAP price</th><th>Spot price</th><th>Weight</th><th>Unrealized</th></tr></thead><tbody id="positions"><tr><td colspan="8"><div class="skel">Loading positions…</div></td></tr></tbody></table></div>
-    </div>
-    <div class="card">
-      <h2>Risk limits <span class="mono" style="text-transform:none;letter-spacing:0">(LeashVault storage — the agent cannot change these)</span></h2>
-      <div class="limits" id="limits"><div class="skel" style="grid-column:1/-1">Loading limits…</div></div>
-      <div id="pending"></div>
-      <div id="ownerctl" style="display:none; margin-top:10px; gap:8px;">
-        <button class="danger" id="pauseBtn">Kill switch: pause agent</button>
-        <button id="unpauseBtn">Resume</button>
-        <span class="note">You are the vault owner. These buttons sign with your wallet.</span>
+
+    <div class="stack" id="agent">
+      <div class="card chat">
+        <div class="chead"><div><h2><span class="ic">✦</span>Talk to the agent</h2><div class="sub">Plain words become on-chain limits; the vault owner signs</div></div></div>
+        <div class="msgs" id="msgs"></div>
+        <div class="chips" id="chips"></div>
+        <div class="chatin"><input id="chatIn" placeholder="e.g. be more conservative, max 0.5 USDT a trade" /><button class="primary" id="send">Send</button></div>
       </div>
     </div>
-    <div class="card">
-      <h2>Market signals <span class="mono" style="text-transform:none;letter-spacing:0">(read live from HSKSwap pools)</span></h2>
-      <div class="sig" id="signals"><div class="skel" style="grid-column:1/-1">Reading HSKSwap pools…</div></div>
-      <div class="note">TWAP = pool.observe() over 5 min. Testnet pool prices are synthetic; mainnet HSKSwap, the HashKey Global exchange and the APRO HSK/USD oracle are shown for reference.</div>
+  </div>
+
+  <div class="card" id="borrow">
+    <div class="chead">
+      <div><h2><span class="ic">⇅</span>Borrow</h2><div class="sub">LeashLend: deposit WHSK, borrow test USDT. Priced at the HSKSwap TWAP. <span id="lendAddr"></span></div></div>
+      <span class="badge w">Unaudited · testnet only</span>
     </div>
-  </section>
-  <section style="display:flex; flex-direction:column; gap:16px;">
-    <div class="card chat">
-      <h2>Talk to the agent</h2>
-      <div class="msgs" id="msgs"></div>
-      <div class="chips" id="chips"></div>
-      <div class="chatin"><input id="chatIn" placeholder="e.g. be more conservative, max 0.5 USDT a trade" /><button class="primary" id="send">Send</button></div>
+    <div class="lend">
+      <div class="lstats" id="lendStats">
+        <div class="limit"><div class="k">WHSK price (TWAP 5m)</div><div class="v" id="lpPrice">–</div><div class="c" id="lpOracle">HSKSwap WHSK/USDT 0.05%</div></div>
+        <div class="limit"><div class="k">Available liquidity</div><div class="v" id="lpCash">–</div><div class="c">USDT ready to borrow</div></div>
+        <div class="limit"><div class="k">Total borrowed</div><div class="v" id="lpDebt">–</div><div class="c" id="lpUtil">utilization –</div></div>
+        <div class="limit"><div class="k">Borrow APR</div><div class="v" id="lpApr">–</div><div class="c">fixed, accrues per second</div></div>
+        <div class="limit"><div class="k">Collateral deposited</div><div class="v" id="lpColl">–</div><div class="c" id="lpCollV">WHSK</div></div>
+        <div class="limit"><div class="k">Risk parameters</div><div class="v" id="lpParams">–</div><div class="c">max LTV · liquidation · bonus</div></div>
+        <div class="note wide" style="margin-top:2px">Anyone can liquidate a position whose debt exceeds 65% of its collateral value, at the TWAP plus a 5% bonus. Borrowing pauses automatically when the pool's spot price is more than ~5% off its TWAP.</div>
+      </div>
+      <div class="pane" id="lendUser">
+        <div class="empty" id="lendConnect"><b>Connect a wallet to borrow</b>Your WHSK and USDT balances, collateral, debt and health factor appear here.<div style="margin-top:12px"><button class="primary" id="lendConnectBtn">Connect wallet</button></div></div>
+        <div id="lendWallet" style="display:none">
+          <h3><span>Your position</span><span class="mono" id="lwAddr"></span></h3>
+          <div class="kv">
+            <div><div class="k">HSK (gas)</div><div class="v" id="lwHsk">–</div></div>
+            <div><div class="k">WHSK in wallet</div><div class="v" id="lwWhsk">–</div></div>
+            <div><div class="k">USDT in wallet</div><div class="v" id="lwUsdt">–</div></div>
+            <div><div class="k">Collateral</div><div class="v" id="lwColl">–</div></div>
+            <div><div class="k">Debt</div><div class="v" id="lwDebt">–</div></div>
+            <div><div class="k">Can borrow</div><div class="v" id="lwAvail">–</div></div>
+          </div>
+          <div class="hf">
+            <div class="hfrow"><span>Health factor</span><b id="lwHf">–</b></div>
+            <div class="bar" title="Debt as a share of the liquidation limit"><i id="lwBar"></i><span class="tick" style="left:76.9%" title="50% LTV borrow limit"></span></div>
+            <div class="barlbl"><span>safe</span><span>borrow limit</span><span>liquidation</span></div>
+          </div>
+          <div class="acts">
+            <div class="act"><div class="ah">Wrap HSK → WHSK<span>for collateral</span></div><div class="row"><input class="in" id="amtWrap" inputmode="decimal" placeholder="0.01" /><button class="sm ghost" data-max="wrap">Max</button></div><div class="btns"><button id="btnWrap">Wrap</button></div></div>
+            <div class="act"><div class="ah">Deposit WHSK<span id="alWhsk"></span></div><div class="row"><input class="in" id="amtDep" inputmode="decimal" placeholder="0.01" /><button class="sm ghost" data-max="dep">Max</button></div><div class="btns"><button id="btnApproveW">Approve</button><button class="primary" id="btnDep">Deposit</button></div></div>
+            <div class="act"><div class="ah">Borrow USDT<span>up to 50% LTV</span></div><div class="row"><input class="in" id="amtBor" inputmode="decimal" placeholder="0.10" /><button class="sm ghost" data-max="bor">Max</button></div><div class="btns"><button class="primary" id="btnBor">Borrow</button></div></div>
+            <div class="act"><div class="ah">Repay USDT<span id="alUsdt"></span></div><div class="row"><input class="in" id="amtRep" inputmode="decimal" placeholder="0.10" /><button class="sm ghost" data-max="rep">Max</button></div><div class="btns"><button id="btnApproveU">Approve</button><button class="primary" id="btnRep">Repay</button></div></div>
+            <div class="act" style="grid-column:1/-1"><div class="ah">Withdraw WHSK<span>remaining debt must stay within 50% LTV</span></div><div class="row"><input class="in" id="amtWd" inputmode="decimal" placeholder="0.01" /><button class="sm ghost" data-max="wd">Max</button><button id="btnWd">Withdraw</button></div></div>
+          </div>
+        </div>
+        <div class="lmsg" id="lendMsg"></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>On-chain decision log <span class="mono" style="text-transform:none;letter-spacing:0">(every trade, block and hold)</span></h2>
-      <div class="tabs" id="tabs"></div>
-      <div class="feed" id="feed"><div class="skel">Loading the decision log…</div></div>
+  </div>
+
+  <div class="cols">
+    <div class="stack">
+      <div class="card">
+        <div class="chead"><div><h2><span class="ic">◆</span>Risk limits</h2><div class="sub">LeashVault storage · the agent cannot change these</div></div></div>
+        <div class="limits" id="limits"><div class="skel" style="grid-column:1/-1">Loading limits…</div></div>
+        <div id="pending"></div>
+        <div id="ownerctl">
+          <button class="danger" id="pauseBtn">Kill switch: pause agent</button>
+          <button id="unpauseBtn">Resume</button>
+          <span class="note" style="margin:0">You are the vault owner. These buttons sign with your wallet.</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="chead"><div><h2><span class="ic">≋</span>Market signals</h2><div class="sub">Read live from HSKSwap pools</div></div></div>
+        <div class="sig" id="signals"><div class="skel" style="grid-column:1/-1">Reading HSKSwap pools…</div></div>
+        <div class="note">TWAP = pool.observe() over 5 min. Testnet pool prices are synthetic; mainnet HSKSwap, the HashKey Global exchange and the APRO HSK/USD oracle are shown for reference.</div>
+      </div>
     </div>
-  </section>
+    <div class="stack" id="log">
+      <div class="card">
+        <div class="chead"><div><h2><span class="ic">≡</span>On-chain decision log</h2><div class="sub">Every trade, block and hold, with its reasoning hash</div></div></div>
+        <div class="tabs" id="tabs"></div>
+        <div class="feed" id="feed"><div class="skel">Loading the decision log…</div></div>
+      </div>
+    </div>
+  </div>
 </main>
+<footer><span>Leash · HSK Chain Horizon hackathon · testnet demo, unaudited contracts</span><span><a href="https://github.com/Mofofk/leash-hsk-agent" target="_blank">Source on GitHub</a></span></footer>
 <script>
 const qs = new URLSearchParams(location.search);
 const BASE = location.pathname.includes("/dashboard/") ? location.pathname.split("/dashboard/")[0] + "/" : "/";
@@ -150,12 +342,13 @@ const ABI = [
   "event Paused(address indexed by,string reason)", "event PendingRiskCancelled()", "event Unpaused(address indexed by)",
   "event Deposited(address indexed token,uint256 amount,uint256 value)", "event Withdrawn(address indexed token,uint256 amount,address to)"
 ];
+const LEND_ABI = ["function stats() view returns (uint256 cash,uint256 totalDebt,uint256 totalCollateral,uint256 twapPrice,uint256 utilizationBps,bool sane,bool paused)", "function position(address) view returns (uint256 collateral,uint256 debt,uint256 collateralValue,uint256 maxBorrow,uint256 available,uint256 healthFactor)", "function depositCollateral(uint256)", "function borrow(uint256)", "function repay(uint256) returns (uint256)", "function withdrawCollateral(uint256)", "error NotOwner()", "error IsPaused()", "error ZeroAmount()", "error Unhealthy()", "error ExceedsLtv()", "error NoLiquidity()", "error Healthy()", "error PriceOutOfBounds()", "error SpotDeviates()", "error OracleUnavailable()", "error TransferFailed()", "error Reentrancy()"];
 const POOL_ABI = ["function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)", "function observe(uint32[]) view returns (int56[],uint160[])", "function token0() view returns (address)"];
 let D, provider, vault, sym = {}, owner, signer;
 let SNAP = null, SNAPMODE = false;
 async function loadSnap() { if (!SNAP) { try { SNAP = await (await fetch(BASE + "dashboard/snapshot.json?t=" + Date.now())).json(); } catch { SNAP = { cache: {} }; } } return SNAP; }
 function showSnap() {
-  const b = $("banner"); if (!SNAPMODE) { b.style.display = "none"; return; }
+  const b = $("banner"); $("net").classList.toggle("snap", SNAPMODE); if (!SNAPMODE) { b.style.display = "none"; return; }
   b.style.display = "block"; b.textContent = "HSK Chain testnet RPC isn't reachable from your network, so this shows the agent's last on-chain snapshot (block " + SNAP.block + ", " + new Date(SNAP.at).toLocaleString() + "). It switches back to live automatically.";
 }
 // keep identical to rk() in agent/src/snapshot.js
@@ -192,8 +385,9 @@ async function init() {
   provider = new ethers.JsonRpcProvider(fr, D.chainId, { staticNetwork: true });
   vault = new ethers.Contract(D.vault, ABI, provider);
   for (const [s, t] of Object.entries(D.tokens)) sym[t.address.toLowerCase()] = s;
-  $("net").innerHTML = `HSK Chain Testnet · 133 · vault ${addr(D.vault)}`;
+  $("net").innerHTML = `HSK Testnet · vault ${addr(D.vault)}`;
   setupChat();
+  setupBorrow();
   $("tabs").onclick = (e) => { const k = e.target.dataset?.k; if (k) { filter = k; feed(); } };
   await refresh();
   setInterval(refresh, 15000);
@@ -208,7 +402,7 @@ async function refresh() {
     $("pnl").innerHTML = `<span class="${sgn(E(pnl[0]))}">${E(pnl[0]) >= 0 ? "+" : ""}${f(E(pnl[0]), 4)}</span>`;
     $("pnlsub").innerHTML = `realized <span class="${sgn(E(pnl[1]))}">${f(E(pnl[1]), 4)}</span> · unrealized <span class="${sgn(E(pnl[2]))}">${f(E(pnl[2]), 4)}</span> · ${nav ? f(E(pnl[0]) / (nav - E(pnl[0])) * 100, 2) : 0}%`;
     $("trades").textContent = tc.toString(); $("tradesub").textContent = `${td} today`; $("blocked").textContent = bc.toString();
-    $("status").className = "pill " + (paused ? "bad" : "ok"); $("status").textContent = paused ? "PAUSED (kill switch)" : "AGENT ACTIVE";
+    $("status").className = "pill " + (paused ? "bad" : "ok"); $("status").textContent = paused ? "Paused (kill switch)" : "Agent active";
     let rows = "";
     for (const t of toks) {
       const [bal, cost, val, pt, ps] = await vault.position(t);
@@ -228,7 +422,7 @@ async function refresh() {
     $("ownerctl").style.display = signer && (await signer.getAddress()).toLowerCase() === owner.toLowerCase() ? "flex" : "none";
     const latest = await loadLogs();
     showSnap();
-    await Promise.all([signals().catch(console.error), feed(), history(latest).catch((e) => { console.error(e); $("chart").innerHTML = '<div class="note">Could not rebuild the history from this RPC (historical state calls failed).</div>'; })]);
+    await Promise.all([signals().catch(console.error), lendStats().catch(console.error), lendUser().catch(console.error), feed(), history(latest).catch((e) => { console.error(e); $("chart").innerHTML = '<div class="note">Could not rebuild the history from this RPC (historical state calls failed).</div>'; })]);
   } catch (e) { console.error(e); const b = $("banner"); b.style.display = "block"; b.textContent = "Can't reach HSK Chain testnet RPC right now (" + (e.shortMessage || e.message || e) + "). Retrying every 15 s."; }
 }
 
@@ -320,7 +514,7 @@ function drawChart(pts, marks) {
   const yN = (v) => T + (1 - (v - n0) / (n1 - n0)) * (H - T - B), yP = (v) => T + (1 - (v - p0) / (p1 - p0)) * (H - T - B);
   const step = (ys) => pts.map((p, i) => (i ? `H${x(p.t).toFixed(1)}V${ys(p).toFixed(1)}` : `M${x(p.t).toFixed(1)},${ys(p).toFixed(1)}`)).join("");
   const navPath = step((p) => yN(p.nav)), pnlPath = step((p) => yP(p.pnl));
-  const grid = [0, 0.25, 0.5, 0.75, 1].map((g) => { const y = T + g * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="#1f2a37"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" fill="#8b98a5" font-size="11">${(n1 - g * (n1 - n0)).toFixed(2)}</text><text x="${W - R + 6}" y="${y + 4}" fill="#ffb547" font-size="11">${(p1 - g * (p1 - p0)).toFixed(2)}</text>`; }).join("");
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((g) => { const y = T + g * (H - T - B); return `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="rgba(148,163,184,.10)"/><text x="${L - 6}" y="${y + 4}" text-anchor="end" fill="#8a97a8" font-size="11">${(n1 - g * (n1 - n0)).toFixed(2)}</text><text x="${W - R + 6}" y="${y + 4}" fill="#ffb547" font-size="11">${(p1 - g * (p1 - p0)).toFixed(2)}</text>`; }).join("");
   const fmtT = (t) => { const d = new Date(t * 1000); return (t1 - t0 > 86400 ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " : "") + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
   const xt = [0, 0.33, 0.66, 1].map((g) => `<text x="${L + g * (W - L - R)}" y="${H - B + 16}" text-anchor="${g === 0 ? "start" : g === 1 ? "end" : "middle"}" fill="#8b98a5" font-size="11">${fmtT(t0 + g * (t1 - t0))}</text>`).join("");
   const col = { arb: "#5aa9ff", trade: "#9be7cf", blocked: "#ff5d6c" };
@@ -417,12 +611,134 @@ async function ownerExec(a, msg) {
   } else throw new Error(a.type + " runs only with the local agent (npm start)");
   await tx.wait(); return tx.hash;
 }
+// ---- Borrow: LeashLend (WHSK collateral, USDT debt) -------------------------------------------------
+let lend = null, lendBusy = false, LW = null;
+const ERC20_ABI = ["function balanceOf(address) view returns (uint256)", "function allowance(address,address) view returns (uint256)", "function approve(address,uint256) returns (bool)", "function deposit() payable"];
+const LEND_ERR = {
+  ExceedsLtv: "That would take your debt above 50% of your collateral value. Borrow less or deposit more WHSK.",
+  NoLiquidity: "The pool doesn't have that much USDT available right now.",
+  Unhealthy: "Withdrawing that much would leave your remaining debt above 50% LTV. Repay some USDT first.",
+  Healthy: "That position is healthy, so it can't be liquidated.",
+  SpotDeviates: "The pool's spot price is more than ~5% away from its TWAP right now (possible manipulation), so price-dependent actions are paused. Try again in a few minutes.",
+  PriceOutOfBounds: "The TWAP price is outside the contract's sanity band, so borrowing is paused.",
+  OracleUnavailable: "The pool TWAP isn't available right now.",
+  IsPaused: "The pool owner has paused new deposits and borrows. Repay and withdraw still work.",
+  ZeroAmount: "Enter an amount greater than zero.",
+  TransferFailed: "Token transfer failed. Check your balance and that you approved enough.",
+};
+function lendErr(e) {
+  if (e?.code === "ACTION_REJECTED" || e?.info?.error?.code === 4001) return "You rejected the request in your wallet.";
+  let name = e?.revert?.name;
+  const data = e?.data || e?.info?.error?.data?.data || e?.info?.error?.data || e?.error?.data;
+  if (!name && typeof data === "string" && lend) { try { name = lend.interface.parseError(data)?.name; } catch {} }
+  if (name && LEND_ERR[name]) return LEND_ERR[name] + " (" + name + ")";
+  return e?.shortMessage || e?.reason || e?.message || String(e);
+}
+function lmsg(html, kind = "info") { const m = $("lendMsg"); m.className = "lmsg " + kind; m.innerHTML = html; }
+const amt = (id) => { const v = $(id).value.trim(); if (!v || isNaN(Number(v)) || Number(v) <= 0) throw new Error("Enter an amount greater than zero."); return ethers.parseEther(v); };
+
+async function lendStats() {
+  if (!lend) return;
+  const [cash, debt, coll, px, util, sane, paused] = await lend.stats();
+  const P = E(px);
+  $("lpPrice").textContent = px ? f(P, 3) + " USDT" : "unavailable";
+  $("lpOracle").innerHTML = px ? (sane ? '<span class="pos">● oracle healthy</span> · WHSK/USDT 0.05% pool' : '<span class="neg">● spot vs TWAP off: borrowing paused</span>') : "TWAP unavailable";
+  $("lpCash").textContent = f(E(cash), 4) + " USDT";
+  $("lpDebt").textContent = f(E(debt), 4) + " USDT";
+  $("lpUtil").textContent = "utilization " + f(Number(util) / 100, 1) + "%" + (paused ? " · PAUSED" : "");
+  $("lpApr").textContent = f(D.lend.aprBps / 100, 2) + "%";
+  $("lpColl").textContent = f(E(coll), 4) + " WHSK";
+  $("lpCollV").textContent = px ? "≈ " + f(E(coll) * P, 2) + " USDT" : "WHSK";
+  $("lpParams").textContent = `${D.lend.ltvBps / 100}% · ${D.lend.liqThresholdBps / 100}% · ${D.lend.liqBonusBps / 100}%`;
+  return { P };
+}
+
+async function lendUser() {
+  if (!lend) return;
+  if (!signer) { $("lendConnect").style.display = ""; $("lendWallet").style.display = "none"; return; }
+  $("lendConnect").style.display = "none"; $("lendWallet").style.display = "";
+  const me = await signer.getAddress(), rp = signer.provider;
+  const L = lend.connect(rp), W = new ethers.Contract(D.tokens.WHSK.address, ERC20_ABI, rp), U = new ethers.Contract(D.tokens.USDT.address, ERC20_ABI, rp);
+  const [hsk, wb, ub, wa, ua, pos] = await Promise.all([rp.getBalance(me), W.balanceOf(me), U.balanceOf(me), W.allowance(me, D.lend.address), U.allowance(me, D.lend.address), L.position(me)]);
+  const [c, d, cv, mb, av, hf] = pos;
+  LW = { me, hsk, wb, ub, wa, ua, c, d, cv, mb, av, hf };
+  $("lwAddr").innerHTML = addr(me);
+  $("lwHsk").textContent = f(E(hsk), 4); $("lwWhsk").textContent = f(E(wb), 4); $("lwUsdt").textContent = f(E(ub), 4);
+  $("lwColl").innerHTML = `${f(E(c), 4)} <span class="sub" style="display:inline">WHSK · ${f(E(cv), 2)} USDT</span>`;
+  $("lwDebt").textContent = f(E(d), 4) + " USDT";
+  $("lwAvail").textContent = f(E(av), 4) + " USDT";
+  $("alWhsk").textContent = "approved " + (wa > 10n ** 30n ? "∞" : f(E(wa), 4));
+  $("alUsdt").textContent = "approved " + (ua > 10n ** 30n ? "∞" : f(E(ua), 4));
+  const bar = $("lwBar");
+  if (d === 0n) { $("lwHf").textContent = "∞"; $("lwHf").className = "pos"; bar.style.width = "0%"; }
+  else {
+    const h = Number(hf) / 1e18, use = cv > 0n ? Math.min(1, E(d) / (E(cv) * D.lend.liqThresholdBps / 1e4)) : 1;
+    $("lwHf").textContent = cv > 0n ? f(h, 2) : "–"; $("lwHf").className = h < 1 ? "neg" : h < 1.3 ? "" : "pos";
+    bar.style.width = (use * 100).toFixed(1) + "%"; bar.style.background = use >= 1 ? "var(--bad)" : use > 0.769 ? "var(--warn)" : "var(--accent)";
+  }
+}
+
+function lendMax(k) {
+  if (!LW) return;
+  const fx = (x) => { const s = ethers.formatEther(x > 0n ? x : 0n); return s.includes(".") ? s.slice(0, s.indexOf(".") + 7) : s; };
+  if (k === "wrap") $("amtWrap").value = fx(LW.hsk - ethers.parseEther("0.005")); // keep gas
+  if (k === "dep") $("amtDep").value = fx(LW.wb);
+  if (k === "bor") $("amtBor").value = fx(LW.av * 999n / 1000n);
+  if (k === "rep") $("amtRep").value = fx(LW.d < LW.ub ? LW.d : LW.ub);
+  if (k === "wd") {
+    // keep remaining debt within LTV: need collateral value >= debt / 50%
+    const needV = LW.d * 10000n / BigInt(D.lend.ltvBps);
+    const need = LW.cv > 0n ? (LW.c * needV + LW.cv - 1n) / LW.cv : LW.c;
+    $("amtWd").value = fx(LW.d === 0n ? LW.c : (LW.c - need) * 995n / 1000n);
+  }
+}
+
+async function lendAct(label, fn) {
+  if (lendBusy) return; lendBusy = true;
+  const btns = [...document.querySelectorAll("#lendWallet button")]; btns.forEach((b) => (b.disabled = true));
+  try {
+    lmsg(`${label}: confirm in your wallet…`);
+    const t = await fn();
+    lmsg(`${label}: pending ${tx(t.hash)}…`);
+    const rc = await t.wait();
+    if (rc && rc.status === 0) throw new Error("transaction reverted");
+    lmsg(`✓ ${label} confirmed · ${tx(t.hash)}`, "ok");
+  } catch (e) { console.error(e); lmsg(`✗ ${label} failed: ${lendErr(e)}`, "err"); }
+  finally { btns.forEach((b) => (b.disabled = false)); lendBusy = false; lendStats().catch(() => {}); lendUser().catch(console.error); }
+}
+
+function setupBorrow() {
+  if (!D.lend) { $("borrow").style.display = "none"; return; }
+  lend = new ethers.Contract(D.lend.address, LEND_ABI, provider);
+  $("lendAddr").innerHTML = "Contract " + addr(D.lend.address) + ".";
+  $("lendConnectBtn").onclick = () => $("connect").click();
+  document.querySelectorAll("#lendWallet [data-max]").forEach((b) => (b.onclick = () => lendMax(b.dataset.max)));
+  const S = () => lend.connect(signer), Wt = () => new ethers.Contract(D.tokens.WHSK.address, ERC20_ABI, signer), Ut = () => new ethers.Contract(D.tokens.USDT.address, ERC20_ABI, signer);
+  const wrap = (label, fn) => () => lendAct(label, fn);
+  $("btnWrap").onclick = wrap("Wrap HSK", async () => Wt().deposit({ value: amt("amtWrap") }));
+  $("btnApproveW").onclick = wrap("Approve WHSK", async () => Wt().approve(D.lend.address, amt("amtDep")));
+  $("btnDep").onclick = wrap("Deposit WHSK", async () => { const a = amt("amtDep"); if (LW && LW.wa < a) throw new Error("Approve at least " + ethers.formatEther(a) + " WHSK first."); return S().depositCollateral(a); });
+  $("btnBor").onclick = wrap("Borrow USDT", async () => S().borrow(amt("amtBor")));
+  $("btnApproveU").onclick = wrap("Approve USDT", async () => { const a = amt("amtRep"); return Ut().approve(D.lend.address, LW && a >= LW.d ? LW.d + LW.d / 1000n + 10n ** 12n : a); });
+  $("btnRep").onclick = wrap("Repay USDT", async () => {
+    let a = amt("amtRep");
+    if (LW && a >= LW.d) { // full repay: pass max so interest accrued until the block is included is covered
+      const need = LW.d + LW.d / 10000n + 10n ** 12n;
+      if (LW.ub < need) throw new Error("Full repay needs a little more USDT than the debt shown, for interest that accrues each second (" + ethers.formatEther(need) + " USDT).");
+      if (LW.ua < need) throw new Error("Approve at least " + ethers.formatEther(need) + " USDT first.");
+      a = ethers.MaxUint256;
+    } else if (LW && LW.ua < a) throw new Error("Approve at least " + ethers.formatEther(a) + " USDT first.");
+    return S().repay(a);
+  });
+  $("btnWd").onclick = wrap("Withdraw WHSK", async () => S().withdrawCollateral(amt("amtWd")));
+}
 $("connect").onclick = async () => {
-  if (!window.ethereum) return alert("No browser wallet found. The dashboard works read-only without one; a wallet is only needed for the owner's kill switch.");
+  if (!window.ethereum) return alert("No browser wallet found. The dashboard works read-only without one; connect a wallet (e.g. MetaMask on HSK Chain testnet) to borrow, or to use the owner's kill switch.");
   const bp = new ethers.BrowserProvider(window.ethereum);
   try { await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x85" }] }); }
   catch { await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{ chainId: "0x85", chainName: "HSK Chain Testnet", nativeCurrency: { name: "HSK", symbol: "HSK", decimals: 18 }, rpcUrls: [D.rpc], blockExplorerUrls: [D.explorer] }] }); }
-  signer = await bp.getSigner(); $("connect").textContent = short(await signer.getAddress()); refresh();
+  signer = await bp.getSigner(); $("connect").textContent = short(await signer.getAddress()); $("connect").classList.remove("primary"); refresh();
+  if (!window.__leashAcct) { window.__leashAcct = true; window.ethereum.on?.("accountsChanged", async (accs) => { LW = null; if (!accs || !accs.length) { signer = null; $("connect").textContent = "Connect wallet"; $("connect").classList.add("primary"); } else { signer = await new ethers.BrowserProvider(window.ethereum).getSigner(); $("connect").textContent = short(await signer.getAddress()); } refresh(); }); }
 };
 $("pauseBtn").onclick = async () => { await (await vault.connect(signer).pause("owner kill switch from dashboard")).wait(); refresh(); };
 $("unpauseBtn").onclick = async () => { await (await vault.connect(signer).unpause()).wait(); refresh(); };
