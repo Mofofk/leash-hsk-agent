@@ -42,13 +42,15 @@ function toParams(cur, p) {
   return n;
 }
 
-export async function handleChat(message) {
+export async function handleChat(message, { execute = true } = {}) {
   const [pf, events, prefs] = await Promise.all([readPortfolio(), recentEvents(10), Promise.resolve(loadPrefs())]);
   let sig = null;
   if (/price|signal|spread|arb|market|opportunit/i.test(message)) sig = await gatherSignals(ethers.parseEther("0.01")).catch(() => null);
   const state = { portfolio: { ...pf, riskRaw: undefined }, recentEvents: events, preferences: prefs, signals: sig, explorer: net.explorer };
-  const { model, data } = await geminiJSON(SYSTEM, `STATE:\n${JSON.stringify(state)}\n\nUSER: ${message}`, { temperature: 0.1 });
+  const sys = execute ? SYSTEM : SYSTEM + "\nPUBLIC DEMO MODE: nothing you emit executes automatically; each action is shown as a proposal that only the vault owner can sign in the dashboard. Phrase the reply as a proposal and never claim an action happened.";
+  const { model, data } = await geminiJSON(sys, `STATE:\n${JSON.stringify(state)}\n\nUSER: ${message}`, { temperature: 0.1 });
   const results = [];
+  if (!execute) return { model, reply: data.reply, actions: data.actions || [], results: (data.actions || []).map((a) => ({ action: a.type, proposed: true, detail: a })) };
   for (const a of data.actions || []) {
     try {
       if (a.type === "update_risk") {
@@ -101,6 +103,7 @@ export function renderResults(results) {
   return results
     .map((r) => {
       if (r.error) return `✗ ${r.action} failed: ${r.error}`;
+      if (r.proposed) return `→ proposed: ${r.action} ${JSON.stringify(r.detail.params || r.detail.prefs || (r.detail.symbol ? { symbol: r.detail.symbol, allowed: r.detail.allowed } : r.detail.side ? { side: r.detail.side, amountWhsk: r.detail.amountWhsk, amountUsdt: r.detail.amountUsdt } : ""))}`;
       if (r.blockedBy) return `⛔ ${r.action}: vault BLOCKED it on-chain (${r.blockedBy}) ${r.url}`;
       if (r.url) return `✓ ${r.action}${r.event ? " → " + r.event : ""} ${r.url}`;
       return `✓ ${r.action} ${JSON.stringify(r.prefs || r.params || "")}`;

@@ -12,19 +12,31 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".json": "applica
 const json = (res, code, obj) => { res.writeHead(code, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type" }); res.end(JSON.stringify(obj, (k, v) => (typeof v === "bigint" ? v.toString() : v))); };
 const body = (req) => new Promise((ok) => { let b = ""; req.on("data", (c) => (b += c)); req.on("end", () => ok(b ? JSON.parse(b) : {})); });
 
+// PUBLIC=1: hosted demo. Chat answers from the chain and only PROPOSES actions (no keys on the server);
+// the vault owner signs proposals in the dashboard. A small per-IP limit protects the LLM quota.
+const PUBLIC = process.env.PUBLIC === "1";
+const hits = new Map();
+const limited = (req) => {
+  const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  const now = Date.now(), h = (hits.get(ip) || []).filter((t) => now - t < 3600e3);
+  h.push(now); hits.set(ip, h); return h.length > 30;
+};
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x");
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (url.pathname === "/api/chat" && req.method === "POST") {
+      if (PUBLIC && limited(req)) return json(res, 429, { error: "Demo limit reached (30 messages an hour). Try again later." });
       const { message } = await body(req);
-      const r = await handleChat(String(message || ""));
+      const r = await handleChat(String(message || "").slice(0, 500), { execute: !PUBLIC });
       return json(res, 200, { ...r, text: [r.reply, renderResults(r.results)].filter(Boolean).join("\n") });
     }
+    if (url.pathname === "/api/cycle" && req.method === "POST" && PUBLIC) return json(res, 403, { error: "disabled in the public demo" });
     if (url.pathname === "/api/cycle" && req.method === "POST") return json(res, 200, await runCycle());
     if (url.pathname === "/api/state") return json(res, 200, { portfolio: { ...(await readPortfolio()), riskRaw: undefined }, events: await recentEvents(20), prefs: loadPrefs() });
     if (url.pathname === "/api/signals") return json(res, 200, await gatherSignals(ethers.parseEther("0.01")));
-    if (url.pathname === "/api/health") return json(res, 200, { ok: true, agent: true });
+    if (url.pathname === "/api/health") return json(res, 200, { ok: true, agent: true, public: PUBLIC });
     // static: dashboard at /, plus /decisions/*.json and /deployments.json
     if (url.pathname === "/" || url.pathname === "/dashboard") { res.writeHead(302, { location: "/dashboard/" + url.search }); return res.end(); }
     let p = url.pathname.endsWith("/") ? url.pathname + "index.html" : url.pathname;

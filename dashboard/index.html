@@ -132,6 +132,7 @@ const BASE = location.pathname.includes("/dashboard/") ? location.pathname.split
 const AGENT = qs.get("agent") || (location.protocol.startsWith("http") && !/githack|github\.io/.test(location.host) ? "" : null);
 const CODES = ["NONE","PAUSED","TOKEN_NOT_ALLOWED","POOL_NOT_ALLOWED","INSUFFICIENT_BALANCE","COOLDOWN","FREQUENCY","ORACLE","PRICE_DEVIATION","TRADE_TOO_LARGE","POSITION_LIMIT","DAILY_LOSS_LIMIT","STOP_LOSS_ACTIVE","SLIPPAGE","ARB_UNPROFITABLE","ORACLE_DEVIATION","STABLE_DEPEG"];
 const ABI = [
+  "function setRiskParams((uint128 maxTradeQuote,uint16 maxPositionBps,uint16 maxSlippageBps,uint16 maxDeviationBps,uint16 dailyLossBps,uint16 stopLossBps,uint32 cooldown,uint16 maxTradesPerDay,uint32 twapWindow) p, string instruction)", "function configureToken(address token, address pool, bool allowed)",
   "function nav() view returns (uint256)", "function pnl() view returns (int256,int256,int256)", "function paused() view returns (bool)",
   "function tokens() view returns (address[])", "function position(address) view returns (uint256,uint256,uint256,uint256,uint256)",
   "function risk() view returns (uint128 maxTradeQuote,uint16 maxPositionBps,uint16 maxSlippageBps,uint16 maxDeviationBps,uint16 dailyLossBps,uint16 stopLossBps,uint32 cooldown,uint16 maxTradesPerDay,uint32 twapWindow)",
@@ -381,8 +382,39 @@ async function send() {
   const w = addMsg("…thinking, checking the chain", "a");
   try {
     const r = await (await fetch((AGENT || "") + "/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: m }) })).json();
-    w.remove(); addMsg(r.text || r.error || "no answer", "a"); refresh();
+    w.remove(); addMsg(r.text || r.error || "no answer", "a");
+    const props = (r.results || []).filter((x) => x.proposed);
+    if (props.length) {
+      const isOwner = signer && (await signer.getAddress()).toLowerCase() === owner.toLowerCase();
+      const d = addMsg(isOwner ? "Sign these as the vault owner:" : "Proposed only. In this public demo nothing runs until the vault owner connects their wallet and signs it here.", "a");
+      if (isOwner) for (const p of props) {
+        const b = document.createElement("button"); b.textContent = "Sign: " + p.action; b.style.margin = "6px 6px 0 0";
+        b.onclick = async () => { b.disabled = true; try { const t = await ownerExec(p.detail, m); addMsg("✓ " + p.action + " " + D.explorer.replace(/\/$/, "") + "/tx/" + t, "a"); } catch (e) { addMsg("✗ " + p.action + ": " + (e.shortMessage || e.message), "a"); b.disabled = false; } refresh(); };
+        d.appendChild(document.createElement("br")); d.appendChild(b);
+      }
+    }
+    refresh();
   } catch (e) { w.remove(); addMsg("Agent unreachable: " + e.message, "a"); }
+}
+const RISK_F = ["maxTradeQuote","maxPositionBps","maxSlippageBps","maxDeviationBps","dailyLossBps","stopLossBps","cooldown","maxTradesPerDay","twapWindow"];
+async function ownerExec(a, msg) {
+  const v = vault.connect(signer); let tx;
+  if (a.type === "pause") tx = await v.pause(String(a.reason || "paused from chat").slice(0, 120));
+  else if (a.type === "resume") tx = await v.unpause();
+  else if (a.type === "update_risk") {
+    const cur = await vault.risk(), p = a.params || {}, n = {}; RISK_F.forEach((f) => (n[f] = cur[f]));
+    if (p.maxTradeUsdt != null) n.maxTradeQuote = ethers.parseEther(String(p.maxTradeUsdt));
+    const pct = (k, f) => { if (p[k] != null) n[f] = Math.round(Number(p[k]) * 100); };
+    pct("maxPositionPct", "maxPositionBps"); pct("maxSlippagePct", "maxSlippageBps"); pct("maxDeviationPct", "maxDeviationBps"); pct("dailyLossPct", "dailyLossBps"); pct("stopLossPct", "stopLossBps");
+    if (p.cooldownSec != null) n.cooldown = Math.round(p.cooldownSec);
+    if (p.maxTradesPerDay != null) n.maxTradesPerDay = Math.round(p.maxTradesPerDay);
+    if (p.twapWindowSec != null) n.twapWindow = Math.round(p.twapWindowSec);
+    tx = await v.setRiskParams(n, String(msg).slice(0, 200));
+  } else if (a.type === "set_asset") {
+    const t = D.tokens[a.symbol]; if (!t) throw new Error("unknown asset " + a.symbol);
+    tx = await v.configureToken(t.address, Object.values(D.pools)[0].address, !!a.allowed);
+  } else throw new Error(a.type + " runs only with the local agent (npm start)");
+  await tx.wait(); return tx.hash;
 }
 $("connect").onclick = async () => {
   if (!window.ethereum) return alert("No browser wallet found. The dashboard works read-only without one; a wallet is only needed for the owner's kill switch.");
