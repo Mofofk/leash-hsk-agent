@@ -81,3 +81,28 @@ export async function recentEvents(limit = 12) {
   }
   return out.slice(-limit).reverse();
 }
+
+// LeashLend lending pool (read-only stats for chat and /api/state). Never executes anything.
+const LEND_ABI = [
+  "function stats() view returns (uint256 cash,uint256 totalDebt,uint256 totalCollateral,uint256 twapPrice,uint256 utilizationBps,bool sane,bool paused)",
+  "function position(address) view returns (uint256 collateral,uint256 debt,uint256 collateralValue,uint256 maxBorrow,uint256 available,uint256 healthFactor)",
+];
+export async function readLending(user) {
+  if (!net.lend) return null;
+  const L = new ethers.Contract(net.lend.address, LEND_ABI, provider);
+  const e = (x) => Number(ethers.formatEther(x));
+  const s = await L.stats();
+  const out = {
+    contract: net.lend.address, collateral: "WHSK", debtAsset: "USDT", testnetOnly: true, audited: false,
+    maxLtvPct: net.lend.ltvBps / 100, liquidationThresholdPct: net.lend.liqThresholdBps / 100, liquidationBonusPct: net.lend.liqBonusBps / 100,
+    borrowAprPct: net.lend.aprBps / 100, oracle: `HSKSwap WHSK/USDT 0.05% pool TWAP (${net.lend.twapWindowSec}s), spot within ~5% of TWAP`,
+    availableLiquidityUsdt: e(s.cash), totalBorrowedUsdt: e(s.totalDebt), totalCollateralWhsk: e(s.totalCollateral),
+    whskPriceUsdt: e(s.twapPrice), utilizationPct: Number(s.utilizationBps) / 100, oracleHealthy: s.sane, paused: s.paused,
+    howToUse: "Open the dashboard's Borrow section, connect a wallet on HSK Chain testnet, Wrap HSK -> WHSK, Approve, Deposit, Borrow; Repay and Withdraw the same way.",
+  };
+  if (user) {
+    const p = await L.position(user);
+    out.position = { address: user, collateralWhsk: e(p.collateral), debtUsdt: e(p.debt), collateralValueUsdt: e(p.collateralValue), canBorrowUsdt: e(p.available), healthFactor: p.debt === 0n ? null : e(p.healthFactor) };
+  }
+  return out;
+}

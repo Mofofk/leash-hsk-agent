@@ -4,7 +4,7 @@ import path from "node:path";
 import { ROOT, PORT, loadPrefs } from "./config.js";
 import { runCycle } from "./agent.js";
 import { handleChat, renderResults } from "./chat.js";
-import { readPortfolio, recentEvents } from "./portfolio.js";
+import { readPortfolio, recentEvents, readLending } from "./portfolio.js";
 import { gatherSignals } from "./signals.js";
 import { ethers } from "ethers";
 
@@ -34,7 +34,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/cycle" && req.method === "POST" && PUBLIC) return json(res, 403, { error: "disabled in the public demo" });
     if (url.pathname === "/api/cycle" && req.method === "POST") return json(res, 200, await runCycle());
-    if (url.pathname === "/api/state") return json(res, 200, { portfolio: { ...(await readPortfolio()), riskRaw: undefined }, events: await recentEvents(20), prefs: loadPrefs() });
+    if (url.pathname === "/api/state") return json(res, 200, { portfolio: { ...(await readPortfolio()), riskRaw: undefined }, events: await recentEvents(20), prefs: loadPrefs(), lending: await readLending().catch(() => null) });
     if (url.pathname === "/api/signals") return json(res, 200, await gatherSignals(ethers.parseEther("0.01")));
     if (url.pathname === "/api/health") return json(res, 200, { ok: true, agent: true, public: PUBLIC });
     // static: dashboard at /, plus /decisions/*.json and /deployments.json

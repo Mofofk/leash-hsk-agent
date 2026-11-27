@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 import { vaultAsOwner, T, txUrl } from "./chain.js";
 import { loadPrefs, savePrefs, net } from "./config.js";
-import { readPortfolio, recentEvents, readRisk } from "./portfolio.js";
+import { readPortfolio, recentEvents, readRisk, readLending } from "./portfolio.js";
 import { gatherSignals } from "./signals.js";
 import { geminiJSON } from "./llm.js";
 import { recordReason } from "./decisions.js";
@@ -28,6 +28,9 @@ A trade request NEVER changes limits: if the trade looks larger than the limits,
 (it will block it on-chain); say so in the reply. Tightening applies at once; loosening any limit is timelocked on-chain
 (the vault queues it for the loosen delay), so tell the user when a change is only queued.
 Answer questions about positions, P&L, trades and limits from the state given; use exact numbers, USDT units, 2-4 decimals.
+LENDING: STATE.lending (when present) holds live stats of LeashLend, a separate testnet lending pool (deposit WHSK, borrow USDT).
+Answer lending questions (price, liquidity, APR, LTV, liquidation, how to borrow, a 0x address's position) from it. You CANNOT borrow,
+repay or move lending funds and must not emit actions for lending: tell the user to use the Borrow section of the dashboard with their own wallet.
 Return JSON: {"reply":"<concise answer for the user, plain text>","actions":[...]}`;
 
 function toParams(cur, p) {
@@ -46,7 +49,12 @@ export async function handleChat(message, { execute = true } = {}) {
   const [pf, events, prefs] = await Promise.all([readPortfolio(), recentEvents(10), Promise.resolve(loadPrefs())]);
   let sig = null;
   if (/price|signal|spread|arb|market|opportunit/i.test(message)) sig = await gatherSignals(ethers.parseEther("0.01")).catch(() => null);
-  const state = { portfolio: { ...pf, riskRaw: undefined }, recentEvents: events, preferences: prefs, signals: sig, explorer: net.explorer };
+  let lending = null;
+  if (/lend|borrow|loan|collateral|liquidat|health|ltv|apr|interest|repay|debt|leashlend/i.test(message)) {
+    const who = (message.match(/0x[0-9a-fA-F]{40}/) || [])[0];
+    lending = await readLending(who && ethers.isAddress(who) ? ethers.getAddress(who) : undefined).catch(() => null);
+  }
+  const state = { portfolio: { ...pf, riskRaw: undefined }, recentEvents: events, preferences: prefs, signals: sig, lending, explorer: net.explorer };
   const sys = execute ? SYSTEM : SYSTEM + "\nPUBLIC DEMO MODE: nothing you emit executes automatically; each action is shown as a proposal that only the vault owner can sign in the dashboard. Phrase the reply as a proposal and never claim an action happened.";
   const { model, data } = await geminiJSON(sys, `STATE:\n${JSON.stringify(state)}\n\nUSER: ${message}`, { temperature: 0.1 });
   const results = [];
