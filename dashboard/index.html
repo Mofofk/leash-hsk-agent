@@ -129,7 +129,8 @@
 <script>
 const qs = new URLSearchParams(location.search);
 const BASE = location.pathname.includes("/dashboard/") ? location.pathname.split("/dashboard/")[0] + "/" : "/";
-const AGENT = qs.get("agent") || (location.protocol.startsWith("http") && !/githack|github\.io/.test(location.host) ? "" : null);
+const HOSTED_AGENT = "https://leash-hsk-agent.onrender.com"; // public demo agent: chat proposes, the vault owner signs
+const AGENT = qs.get("agent") || (location.protocol.startsWith("http") && !/githack|github\.io/.test(location.host) ? "" : HOSTED_AGENT);
 const CODES = ["NONE","PAUSED","TOKEN_NOT_ALLOWED","POOL_NOT_ALLOWED","INSUFFICIENT_BALANCE","COOLDOWN","FREQUENCY","ORACLE","PRICE_DEVIATION","TRADE_TOO_LARGE","POSITION_LIMIT","DAILY_LOSS_LIMIT","STOP_LOSS_ACTIVE","SLIPPAGE","ARB_UNPROFITABLE","ORACLE_DEVIATION","STABLE_DEPEG"];
 const ABI = [
   "function setRiskParams((uint128 maxTradeQuote,uint16 maxPositionBps,uint16 maxSlippageBps,uint16 maxDeviationBps,uint16 dailyLossBps,uint16 stopLossBps,uint32 cooldown,uint16 maxTradesPerDay,uint32 twapWindow) p, string instruction)", "function configureToken(address token, address pool, bool allowed)",
@@ -379,7 +380,7 @@ function setupChat() {
 async function send() {
   const m = $("chatIn").value.trim(); if (!m) return; $("chatIn").value = ""; addMsg(m, "u");
   if (AGENT === null) return addMsg("Agent API not connected in this hosted view (see above).", "a");
-  const w = addMsg("…thinking, checking the chain", "a");
+  const w = addMsg((AGENT === HOSTED_AGENT ? "…thinking, checking the chain (the free server can take ~1 min to wake)" : "…thinking, checking the chain"), "a");
   try {
     const r = await (await fetch((AGENT || "") + "/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: m }) })).json();
     w.remove(); addMsg(r.text || r.error || "no answer", "a");
