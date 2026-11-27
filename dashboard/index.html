@@ -150,6 +150,23 @@ const ABI = [
 ];
 const POOL_ABI = ["function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint8,bool)", "function observe(uint32[]) view returns (int56[],uint160[])", "function token0() view returns (address)"];
 let D, provider, vault, sym = {}, owner, signer;
+let SNAP = null, SNAPMODE = false;
+async function loadSnap() { if (!SNAP) { try { SNAP = await (await fetch(BASE + "dashboard/snapshot.json?t=" + Date.now())).json(); } catch { SNAP = { cache: {} }; } } return SNAP; }
+function showSnap() {
+  const b = $("banner"); if (!SNAPMODE) { b.style.display = "none"; return; }
+  b.style.display = "block"; b.textContent = "HSK Chain testnet RPC isn't reachable from your network, so this shows the agent's last on-chain snapshot (block " + SNAP.block + ", " + new Date(SNAP.at).toLocaleString() + "). It switches back to live automatically.";
+}
+// keep identical to rk() in agent/src/snapshot.js
+function rk(q) {
+  const p = q.params || [];
+  switch (q.method) {
+    case "eth_call": return "call|" + String(p[0].to).toLowerCase() + "|" + p[0].data + "|" + (p[1] === "latest" || p[1] === undefined ? "latest" : parseInt(p[1], 16));
+    case "eth_getLogs": return "logs|" + String(p[0].address).toLowerCase() + "|" + parseInt(p[0].fromBlock, 16) + "|" + parseInt(p[0].toBlock, 16);
+    case "eth_getBlockByNumber": return "blk|" + parseInt(p[0], 16);
+    case "eth_blockNumber": return "bn";
+    default: return q.method + "|" + JSON.stringify(p);
+  }
+}
 const $ = (id) => document.getElementById(id);
 const f = (x, p = 4) => (x === null || x === undefined || isNaN(x)) ? "–" : Number(x).toLocaleString(undefined, { minimumFractionDigits: p, maximumFractionDigits: p });
 const E = (x) => Number(ethers.formatEther(x));
@@ -160,7 +177,17 @@ const sgn = (x) => (x >= 0 ? "pos" : "neg");
 
 async function init() {
   D = (await (await fetch(BASE + "deployments.json")).json())["hsk-testnet"];
-  provider = new ethers.JsonRpcProvider(D.rpc, D.chainId, { staticNetwork: true });
+  // Live RPC first; if this visitor's network can't reach it (e.g. a Cloudflare block), answer from the agent's last recorded snapshot.
+  const fr = new ethers.FetchRequest(D.rpc), live = ethers.FetchRequest.createGetUrlFunc();
+  fr.getUrlFunc = async (req, signal) => {
+    try { const r = await live(req, signal); if (r.statusCode === 200) { if (SNAPMODE) { SNAPMODE = false; showSnap(); } return r; } } catch {}
+    const s = await loadSnap(); if (!Object.keys(s.cache).length) throw new Error("Failed to fetch");
+    const q = JSON.parse(new TextDecoder().decode(req.body)), qa = Array.isArray(q) ? q : [q];
+    const ra = qa.map((x) => { const k = rk(x); return k in s.cache ? { jsonrpc: "2.0", id: x.id, result: s.cache[k] } : { jsonrpc: "2.0", id: x.id, error: { code: -32000, message: "not in snapshot" } }; });
+    SNAPMODE = true; showSnap();
+    return { statusCode: 200, statusMessage: "OK", headers: { "content-type": "application/json" }, body: new TextEncoder().encode(JSON.stringify(Array.isArray(q) ? ra : ra[0])) };
+  };
+  provider = new ethers.JsonRpcProvider(fr, D.chainId, { staticNetwork: true });
   vault = new ethers.Contract(D.vault, ABI, provider);
   for (const [s, t] of Object.entries(D.tokens)) sym[t.address.toLowerCase()] = s;
   $("net").innerHTML = `HSK Chain Testnet · 133 · vault ${addr(D.vault)}`;
@@ -198,7 +225,7 @@ async function refresh() {
     $("pending").innerHTML = pend;
     $("ownerctl").style.display = signer && (await signer.getAddress()).toLowerCase() === owner.toLowerCase() ? "flex" : "none";
     const latest = await loadLogs();
-    $("banner").style.display = "none";
+    showSnap();
     await Promise.all([signals().catch(console.error), feed(), history(latest).catch((e) => { console.error(e); $("chart").innerHTML = '<div class="note">Could not rebuild the history from this RPC (historical state calls failed).</div>'; })]);
   } catch (e) { console.error(e); const b = $("banner"); b.style.display = "block"; b.textContent = "Can't reach HSK Chain testnet RPC right now (" + (e.shortMessage || e.message || e) + "). Retrying every 15 s."; }
 }
