@@ -5,6 +5,24 @@
     "explorer": "https://testnet-explorer.hskchain.net",
     "vault": "0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A",
     "vaultDeployBlock": 36253651,
+    "lend": {
+      "address": "0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15",
+      "deployBlock": 36296376,
+      "deployTx": "0xc9958883d282390b6aba8150980c66a313c18eda564ab2398efaa17f4601d6c1",
+      "collateral": "WHSK",
+      "debt": "USDT",
+      "oraclePool": "0xff2b7E501C870980Bf5641B4a70D0F9fb0f6f6ab",
+      "twapWindowSec": 300,
+      "ltvBps": 5000,
+      "liqThresholdBps": 6500,
+      "liqBonusBps": 500,
+      "aprBps": 500,
+      "priceBandUsdtPerWhsk": [
+        1,
+        10000
+      ],
+      "note": "LeashLend: unaudited testnet lending demo, verified on Blockscout. Separate from the vault; never touches vault funds."
+    },
     "owner": "0xf166119dF7F534B10029119650EEb93Aba5c9b1e",
     "agent": "0x1C7892F259EC084C45EDBEea9cDb2664A4eb81Ff",
     "hskswap": {
