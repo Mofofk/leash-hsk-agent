@@ -23,15 +23,16 @@ Entry for the **HSK Chain Horizon Hackathon · Seoul, Track 1: AI Agent Trading*
 git clone https://github.com/Mofofk/leash-hsk-agent && cd leash-hsk-agent && ./quickstart.sh
 ```
 
-It installs `forge-std`, builds and runs the 34 tests, then serves the read-only dashboard at `http://localhost:8080/dashboard/`. To run the agent itself, see [Run it](#run-it).
+It installs `forge-std`, builds and runs the 47 tests, then serves the read-only dashboard at `http://localhost:8080/dashboard/`. To run the agent itself, see [Run it](#run-it).
 
 | | |
 |---|---|
 | **Network** | HSK Chain testnet (chain 133). Mainnet (177) deploy script prepared, not run |
 | **Vault (v3, live)** | [`0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A`](https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A) · source verified on HSK Blockscout |
+| **Lending (LeashLend)** | [`0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15`](https://testnet-explorer.hskchain.net/address/0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15) · verified · deposit WHSK, borrow test USDT ([Borrow](#borrow-leashlend)) · unaudited, testnet only |
 | **DEX** | HSKSwap: SwapRouter02, QuoterV2 and the WHSK/USDT 0.05% and 0.3% pools |
 | **AI** | Google Gemini (AI Studio) picks between rule-based candidates and runs the chat |
-| **Tests** | `cd contracts && forge test`: 34 tests, 33 on a fork of the live HSK testnet pools plus 1 mainnet dry run with the APRO oracle |
+| **Tests** | `cd contracts && forge test`: 47 tests: 33 vault tests on a fork of the live HSK testnet pools, 1 mainnet dry run with the APRO oracle, 13 LeashLend tests (12 unit + 1 live-pool fork) |
 | **Demo video** | `docs/Leash_HSK_demo.mp4` (2:46, captioned) |
 
 ---
@@ -121,6 +122,7 @@ A static page that reads HSK Chain directly, with no wallet needed: a **track re
 | What | Link |
 |---|---|
 | LeashVault v3 (verified) | [0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A](https://testnet-explorer.hskchain.net/address/0x998F3EAA037d74F328F4Fc300DB6C3C6bBB1951A) |
+| LeashLend (verified) | [0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15](https://testnet-explorer.hskchain.net/address/0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15) |
 | Owner (user) | [0xf166119dF7F534B10029119650EEb93Aba5c9b1e](https://testnet-explorer.hskchain.net/address/0xf166119dF7F534B10029119650EEb93Aba5c9b1e) |
 | Agent key | [0x1C7892F259EC084C45EDBEea9cDb2664A4eb81Ff](https://testnet-explorer.hskchain.net/address/0x1C7892F259EC084C45EDBEea9cDb2664A4eb81Ff) |
 | HSKSwap SwapRouter02 / QuoterV2 / Factory | `0xa6914E66690c6794244B5f66a09eAEbf66254237` / `0x73820d9eE5Bf1BfcD429580320FC7A374E8fa1cC` / `0x2dC2c21D1049F786C535bF9d45F999dB5474f3A0` |
@@ -159,7 +161,7 @@ cp .env.example .env          # DEPLOYER_PK (owner), AGENT_PK, GEMINI_API_KEY  (
 # contracts
 cd contracts
 forge install foundry-rs/forge-std --no-git   # or: git submodule update --init
-forge test                                    # 34 tests; forks the live HSK testnet + a mainnet dry run
+forge test                                    # 47 tests; forks the live HSK testnet + a mainnet dry run
 forge script script/Deploy.s.sol --rpc-url hsk_testnet --broadcast \
   --verify --verifier blockscout --verifier-url https://testnet-explorer.hskchain.net/api/
 # put the new vault address + block in ../deployments.json, then deposit:
@@ -193,6 +195,36 @@ forge script script/DeployMainnet.s.sol --rpc-url hsk_mainnet --broadcast \
 * `@hskswap/sdk-core` address registry, used as the source of all the HSKSwap addresses above
 * The owner can be a **Safe** on HSK Chain (any address works as `owner`)
 
+## Borrow (LeashLend)
+
+> **Unaudited. HSK Chain testnet only, test tokens only.** LeashLend is a small, separate demo contract. It never touches the vault or its funds.
+
+`contracts/src/LeashLend.sol` is a single-market lending pool: anyone with a wallet deposits **WHSK** as collateral and borrows test **USDT**.
+
+| Parameter | Value |
+|---|---|
+| Contract | [`0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15`](https://testnet-explorer.hskchain.net/address/0x6d039E1661beb4Cd9BA9634E1B9bE6Da9bD63e15) (source verified on HSK Blockscout) |
+| Max borrow | 50% of collateral value (LTV) |
+| Liquidation | anyone may liquidate when debt > 65% of collateral value (health factor < 1); liquidator gets a 5% collateral bonus; partial closes allowed |
+| Interest | fixed 5% APR, accrues per second through a global borrow index |
+| Price | HSKSwap WHSK/USDT 0.05% pool TWAP via `observe()` over 300 s (same oracle code as LeashVault) |
+| Sanity bounds | spot must sit within ~5% (500 ticks) of the TWAP, and the TWAP must be within 1–10,000 USDT per WHSK; otherwise borrow, withdraw-with-debt and liquidate revert |
+| Owner | can add or withdraw USDT liquidity and pause new deposits and borrows. Repay and withdraw stay open while paused |
+
+**In the dashboard** (Borrow section): connect a wallet on HSK Chain testnet. You'll see your HSK, WHSK and USDT balances, collateral, debt, how much you can borrow, and a health-factor bar. Actions: **Wrap HSK → WHSK** (WHSK is WETH9-style, so testnet HSK from the faucet wraps 1:1), **Approve**, **Deposit**, **Borrow**, **Repay**, **Withdraw**. Each one shows its tx link, or a plain-language error, inline. Read-only visitors still see the pool's TWAP price, liquidity, total borrowed, utilization and APR. The agent's snapshot caches these too, so they also show when the RPC is blocked. The chat answers lending questions from the live pool stats, but it cannot borrow or move funds.
+
+**End-to-end smoke test on testnet** (deployer wallet): deploy [0xc9958883…](https://testnet-explorer.hskchain.net/tx/0xc9958883d282390b6aba8150980c66a313c18eda564ab2398efaa17f4601d6c1) · fund 5 USDT [0xf5597ae1…](https://testnet-explorer.hskchain.net/tx/0xf5597ae102244bf677199f0f868e85ea6bd40d835b3ad073854feee68733f927) · wrap 0.01 HSK [0x0fbea3c0…](https://testnet-explorer.hskchain.net/tx/0x0fbea3c0315e13fad73d827f83f0671cd1647511fa017523dd98c570bfcd1392) · deposit 0.01 WHSK [0x7ac74ab0…](https://testnet-explorer.hskchain.net/tx/0x7ac74ab03d36ace6e7359f8c462e7870312f63ee11e266a81e509857444bfdb0) · borrow 0.2 USDT [0x24e55dde…](https://testnet-explorer.hskchain.net/tx/0x24e55dde94c5f3cc27c8b30e235f07ab87f260af82cc5349cdfe7175b541c729) · repay all [0xc584435b…](https://testnet-explorer.hskchain.net/tx/0xc584435b114082269193a1005e325586034f111205626355e25a4e719de09eee) · withdraw [0xfb1e3b04…](https://testnet-explorer.hskchain.net/tx/0xfb1e3b0431f10b47f6e15bf1507ecc424cd91c0629a21ba22235d441ccc314ef).
+
+```bash
+cd contracts
+forge test --match-contract LeashLend -vv          # 12 unit tests (mock pool) + 1 fork test on the live pool
+forge script script/DeployLend.s.sol --rpc-url https://testnet.hsk.xyz --broadcast
+forge verify-contract <address> src/LeashLend.sol:LeashLend --chain-id 133 --rpc-url https://testnet.hsk.xyz \
+  --verifier blockscout --verifier-url https://testnet-explorer.hskchain.net/api/ --constructor-args <abi-encoded args>
+```
+
+---
+
 ## Tests
 
 ```
@@ -209,12 +241,16 @@ LeashVaultForkTest (29, forks live HSK testnet HSKSwap pools)
   withdrawals keep P&L honest · fuzz: TWAP floor always holds (256 runs)
 LeashVaultTimelockTest (4): tighten instantly · loosen timelocked · owner cancels · stop-loss off = loosening
 MainnetDryRun (1): mainnet fork deploy + APRO cross-check (fails closed without access) + swap
+LeashLendUnitTest (12, mock pool): deposit/borrow/repay/withdraw with 5% APR · LTV cap · liquidity cap · withdraw keeps LTV
+  liquidation below 65% with 5% bonus · underwater liquidation caps at collateral · spot-vs-TWAP guard · price band
+  oracle down blocks borrow, views still work · pause blocks borrow but not repay/withdraw · owner-only liquidity withdrawal
+LeashLendForkTest (1): full cycle against the live HSK testnet WHSK/USDT pool
 ```
 
 ## Repo layout
 
 ```
-contracts/   Foundry: src/LeashVault.sol, lib/ (TickMath, FullMath, PoolOracle), test/, script/
+contracts/   Foundry: src/LeashVault.sol, src/LeashLend.sol, lib/ (TickMath, FullMath, PoolOracle), test/, script/
 agent/       Node agent: signals, strategy + Gemini, executor, chat, HTTP server
 dashboard/   Static dashboard (ethers v6, vendored)
 decisions/   Published reasoning JSON, named by the on-chain reasonHash
@@ -226,6 +262,7 @@ docs/        BUIDL write-up, demo video, images
 
 * Not audited. Testnet keys only. `.env` is git-ignored and never committed.
 * The demo server holds the owner key so that chat can sign limit changes. In production, the owner signs in their own wallet (the dashboard already supports pause/resume this way). Because loosening is timelocked, even a leaked owner session can't widen the leash instantly.
+* LeashLend is an unaudited testnet demo: fixed APR, one market, no interest-rate model or reserve factor, and liquidations depend on the HSKSwap testnet pool TWAP. Don't reuse it with real funds.
 * APRO feeds on mainnet need the vault to be whitelisted by APRO. Until then the oracle check fails closed.
 
 ## Team
