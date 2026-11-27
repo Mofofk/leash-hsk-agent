@@ -53,8 +53,8 @@ export async function recentEvents(limit = 12) {
   const latest = await provider.getBlockNumber();
   const from = net.vaultDeployBlock || Math.max(0, latest - 200000);
   const logs = [];
-  for (let s = from; s <= latest; s += 50000) {
-    logs.push(...(await provider.getLogs({ address: net.vault, fromBlock: s, toBlock: Math.min(latest, s + 49999) })));
+  for (let s = from; s <= latest; s += 5000) {
+    logs.push(...(await provider.getLogs({ address: net.vault, fromBlock: s, toBlock: Math.min(latest, s + 4999) })));
   }
   const out = [];
   for (const l of logs) {

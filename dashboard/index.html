@@ -248,8 +248,8 @@ let LOGS = [], lastBlock = null, filter = "all", histKey = "", tsCache = {};
 async function loadLogs() {
   const latest = await provider.getBlockNumber();
   const from = lastBlock === null ? D.vaultDeployBlock : lastBlock + 1;
-  for (let s = from; s <= latest; s += 50000) {
-    const raw = await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 49999) });
+  for (let s = from; s <= latest; s += 5000) {
+    const raw = await provider.getLogs({ address: D.vault, fromBlock: s, toBlock: Math.min(latest, s + 4999) });
     for (const l of raw) { let ev = null; try { ev = vault.interface.parseLog(l); } catch {} if (ev) LOGS.push({ l, ev }); }
   }
   lastBlock = latest;
